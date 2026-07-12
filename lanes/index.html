@@ -1504,14 +1504,15 @@ function drawTriBeing(col,type,a,dim,mir){const R=HEXR*.95,ps=beingPieces(type,a
   const label={sniper:'SN',rifle:'RF',shotgun:'SG',shield:'SH',burst:'BR'}[type]||'';ctx.font=`700 ${Math.max(7,Math.round(HEXR*.3))}px ui-sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=2;ctx.strokeStyle='rgba(3,6,12,.85)';ctx.strokeText(label,0,-R*.02);ctx.fillStyle='#fff';ctx.fillText(label,0,-R*.02);ctx.restore();}
 let _sheetHit=[];const SHEET_H=316;
 function drawShardSheet(){ctx.save();ctx.setTransform(1,0,0,1,0,0);_sheetHit=[];const H=SHEET_H;ctx.fillStyle='rgba(11,16,32,.96)';ctx.fillRect(0,0,CW,H);ctx.strokeStyle='rgba(120,215,255,.15)';ctx.strokeRect(0,0,CW,H);   /* EDITABLE pattern sheet: SIDE-muzzle and CORNER-muzzle variants per class, 4 hexes down the lane, shard width already scaled by weaponDamage per column. Tap any piece to toggle it (outer rim vs inner core are separate pieces); edits persist on this device and the live game uses them immediately */
-  ctx.font='700 10px ui-sans-serif';ctx.textAlign='center';ctx.fillStyle='#8fdcc0';ctx.fillText('SIDE MUZZLE \u2192',253,18);ctx.fillText('CORNER MUZZLE \u2192',569,18);ctx.textAlign='left';
-  const cl=[['sniper','SNIPER'],['rifle','RIFLE'],['burst','BURST'],['shotgun','SHOTGUN'],['shield','SHIELD']],r=17,now=performance.now();
-  cl.forEach(([t,lbl],row)=>{const y=52+row*48;
+  ctx.font='700 10px ui-sans-serif';ctx.textAlign='center';ctx.fillStyle='#8fdcc0';ctx.fillText('SIDE MUZZLE \u2192',247,16);ctx.fillText('CORNER MUZZLE \u2192',579,16);
+  ctx.fillStyle='#5f7396';ctx.font='9px ui-sans-serif';for(let k2=0;k2<4;k2++){const cap=k2<3?('hex '+(k2+1)):'impact';ctx.fillText(cap,130+k2*78,32);ctx.fillText(cap,462+k2*78,32);}ctx.textAlign='left';   /* one caption row up top instead of cramming labels per-row -- column k IS the beam's k-th hex */
+  const cl=[['sniper','SNIPER'],['rifle','RIFLE'],['burst','BURST'],['shotgun','SHOTGUN'],['shield','SHIELD']],r=18,now=performance.now();
+  cl.forEach(([t,lbl],row)=>{const y=64+row*52;
     const edited=SHARDPAT[t+'|s']||SHARDPAT[t+'|c'];
     ctx.fillStyle='#dceaff';ctx.font='700 11px ui-sans-serif';ctx.fillText(lbl+(edited?' *':''),8,y+4);
-    ctx.strokeStyle='rgba(200,215,240,.4)';ctx.fillStyle='rgba(255,255,255,.06)';const rx=752,ry=y-13;ctx.fillRect(rx,ry,30,26);ctx.strokeRect(rx,ry,30,26);ctx.fillStyle='#cfe0ff';ctx.font='13px ui-sans-serif';ctx.textAlign='center';ctx.fillText('\u21ba',rx+15,y+5);ctx.textAlign='left';_sheetHit.push({reset:t,x:rx,y:ry,w:30,h:26});
-    [['s',0],['c',Math.PI/6]].forEach(([vr,aOut],vi)=>{const bx=vi?442:126,aIn=aOut+Math.PI;
-      for(let k=0;k<4;k++){const x=bx+k*76;_sheetHit.push({weapon:t,variant:vr,k,x,y,r,aOut});
+    ctx.strokeStyle='rgba(200,215,240,.4)';ctx.fillStyle='rgba(255,255,255,.06)';const rx=736,ry=y-13;ctx.fillRect(rx,ry,30,26);ctx.strokeRect(rx,ry,30,26);ctx.fillStyle='#cfe0ff';ctx.font='13px ui-sans-serif';ctx.textAlign='center';ctx.fillText('\u21ba',rx+15,y+5);ctx.textAlign='left';_sheetHit.push({reset:t,x:rx,y:ry,w:30,h:26});
+    [['s',0],['c',Math.PI/6]].forEach(([vr,aOut],vi)=>{const bx=vi?462:130,aIn=aOut+Math.PI;
+      for(let k=0;k<4;k++){const x=bx+k*78;_sheetHit.push({weapon:t,variant:vr,k,x,y,r,aOut});
         ctx.save();ctx.translate(x,y);ctx.strokeStyle='rgba(120,215,255,.15)';ctx.lineWidth=1;for(let j=0;j<12;j++){const p=subRimPt(r,j);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(p.x,p.y);ctx.stroke();}
         hexPath(0,0,r);ctx.strokeStyle='rgba(160,210,255,.3)';ctx.stroke();ctx.beginPath();ctx.arc(0,0,r*.5,0,7);ctx.strokeStyle='rgba(160,210,255,.14)';ctx.stroke();
         const o0={x:0,y:0};for(const pc of shardPatternPieces(t,aIn,aOut,k,weaponDamage(t,k+1),false,true)){const fl=.85+.15*Math.abs(Math.sin(now/320+k*1.1+pc.t*.7));ctx.shadowColor='#22d3ee';ctx.shadowBlur=pc.inner?9:5;ctx.fillStyle='#22d3ee';
@@ -1525,30 +1526,37 @@ function sheetTap(px,py){for(const cell of _sheetHit){if(cell.reset!=null){if(px
     const t=shardIdxOf(Math.atan2(dy,dx)),inner=dist<cell.r*.5,base=shardIdxOf(cell.aOut),key=((t-base)%12+12)%12,kk=cell.weapon+'|'+cell.variant;
     if(!SHARDPAT[kk]){const ov=[];for(let k2=0;k2<4;k2++){const col={};for(const pc of shardPatternPieces(cell.weapon,cell.aOut+Math.PI,cell.aOut,k2,weaponDamage(cell.weapon,k2+1),false,true))col[((pc.t-base)%12+12)%12]=(pc.outer?1:0)|(pc.inner?2:0);ov.push(col);}SHARDPAT[kk]=ov;}   /* first tap materializes the procedural pattern so you edit exactly what you see */
     const col=SHARDPAT[kk][cell.k];col[key]=(col[key]|0)^(inner?2:1);if(!col[key])delete col[key];saveShardPat();draw();return;}}
-let _shapeHit=[];const SHAPE_H=330;
-function drawShapeSheet(){const oy=EXP.shardSheet?SHEET_H:0;ctx.save();ctx.setTransform(1,0,0,1,0,oy);_shapeHit=[];const H=SHAPE_H;ctx.fillStyle='rgba(11,16,32,.95)';ctx.fillRect(0,0,CW,H);ctx.strokeStyle='rgba(120,215,255,.15)';ctx.strokeRect(0,0,CW,H);   /* EDITABLE shape sheet (Ian): every class silhouette at 24-SHARD resolution, SIDE-facing and CORNER-facing variants. Tap any piece to toggle it (outer rim vs inner core are separate) -- back-load a class so its hittable mass tucks behind a wall when it faces along one. Edits persist on this device; the live game (render, wedge cover, shard graze) uses them immediately. Stacks below the shard sheet when both are on */
-  ctx.font='700 10px ui-sans-serif';ctx.textAlign='center';ctx.fillStyle='#8fdcc0';ctx.fillText('SIDE FACING →',210,18);ctx.fillText('CORNER FACING →',480,18);ctx.textAlign='left';
-  const cl=[['sniper','SNIPER'],['rifle','RIFLE'],['burst','BURST'],['shotgun','SHOTGUN'],['shield','SHIELD']],r=24,o0={x:0,y:0};
-  cl.forEach(([t,lbl],row)=>{const y=62+row*54;
+let _shapeHit=[];const SHAPE_H=410;
+function drawShapeSheet(){const oy=EXP.shardSheet?SHEET_H:0;ctx.save();ctx.setTransform(1,0,0,1,0,oy);_shapeHit=[];const H=SHAPE_H;ctx.fillStyle='rgba(11,16,32,.95)';ctx.fillRect(0,0,CW,H);ctx.strokeStyle='rgba(120,215,255,.15)';ctx.strokeRect(0,0,CW,H);   /* EDITABLE shape sheet (Ian): every class silhouette at 24-SHARD resolution, SIDE-facing and CORNER-facing variants. Tap any piece to toggle it (outer rim vs inner core are separate) -- back-load a class so its hittable mass tucks behind a wall when it faces along one. Edits persist on this device; the live game (render, wedge cover, shard graze) uses them immediately. Stacks below the shard sheet when both are on. ROW PITCH RULE: each editable cell owns r*1.5 = 33px of tap ring on every side, so rows must sit >= 72 apart or port taps bleed into the neighbor row (the original 54px pitch did exactly that) */
+  ctx.font='700 10px ui-sans-serif';ctx.textAlign='center';ctx.fillStyle='#8fdcc0';ctx.fillText('SIDE FACING → (edit)',150,16);ctx.fillText('CORNER FACING → (edit)',310,16);ctx.fillStyle='#7a8fb5';ctx.fillText('SAME ART, AUTO-ROTATED',508,16);
+  ctx.fillStyle='#5f7396';ctx.font='9px ui-sans-serif';ctx.fillText('60°',470,30);ctx.fillText('90°',546,30);ctx.textAlign='left';   /* Ian: "for every one shape facing the side there are three other versions facing" -- yes: side art serves 60/120/180..., corner art serves 90/150/210... These two read-only columns PROVE the rotation: they are the exact game render of the same two drawings at the next two facings, nothing separately stored */
+  const cl=[['sniper','SNIPER'],['rifle','RIFLE'],['burst','BURST'],['shotgun','SHOTGUN'],['shield','SHIELD']],r=22,o0={x:0,y:0};
+  const paint=(t,vr,f,rr)=>{const src=bodyMaskMap(t,vr);ctx.fillStyle=COLORS[0].c;ctx.strokeStyle='#07131f';ctx.lineWidth=1.2;
+    for(const k in src){if(k==='f')continue;const m=src[k]|0;if(!m)continue;const tt=((f+ +k)%12+12)%12;
+      if((m&3)===3){const p0=subRimPt(rr,tt),p1=subRimPt(rr,(tt+1)%12);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(p0.x,p0.y);ctx.lineTo(p1.x,p1.y);ctx.closePath();ctx.fill();ctx.stroke();}
+      else{ctx.beginPath();shardPieceInto(ctx,o0,tt,rr,!!(m&2));ctx.fill();ctx.stroke();}}};
+  const grid=(rr,dim)=>{ctx.strokeStyle=`rgba(120,215,255,${dim?.09:.15})`;ctx.lineWidth=1;for(let j=0;j<12;j++){const p=subRimPt(rr,j);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(p.x,p.y);ctx.stroke();}
+    hexPath(0,0,rr);ctx.strokeStyle=`rgba(160,210,255,${dim?.18:.3})`;ctx.stroke();ctx.beginPath();ctx.arc(0,0,rr*.5,0,7);ctx.strokeStyle=`rgba(160,210,255,${dim?.08:.14})`;ctx.stroke();};
+  cl.forEach(([t,lbl],row)=>{const y=66+row*72;
     const edited=BODYPAT[t+'|s']||BODYPAT[t+'|c'];
     ctx.fillStyle='#dceaff';ctx.font='700 11px ui-sans-serif';ctx.fillText(lbl+(edited?' *':''),8,y+4);
-    ctx.strokeStyle='rgba(200,215,240,.4)';ctx.fillStyle='rgba(255,255,255,.06)';const rx=752,ry=y-13;ctx.fillRect(rx,ry,30,26);ctx.strokeRect(rx,ry,30,26);ctx.fillStyle='#cfe0ff';ctx.font='13px ui-sans-serif';ctx.textAlign='center';ctx.fillText('↺',rx+15,y+5);ctx.textAlign='left';_shapeHit.push({reset:t,x:rx,y:oy+ry,w:30,h:26});
-    [[0,'s',210],[Math.PI/6,'c',480]].forEach(([aF,vr,x])=>{const f=facingFacet(aF);_shapeHit.push({type:t,variant:vr,x,y:oy+y,r,f});
-      ctx.save();ctx.translate(x,y);ctx.strokeStyle='rgba(120,215,255,.15)';ctx.lineWidth=1;for(let j=0;j<12;j++){const p=subRimPt(r,j);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(p.x,p.y);ctx.stroke();}
-      hexPath(0,0,r);ctx.strokeStyle='rgba(160,210,255,.3)';ctx.stroke();ctx.beginPath();ctx.arc(0,0,r*.5,0,7);ctx.strokeStyle='rgba(160,210,255,.14)';ctx.stroke();
-      const src=bodyMaskMap(t,vr);ctx.fillStyle=COLORS[0].c;ctx.strokeStyle='#07131f';ctx.lineWidth=1.2;
-      for(const k in src){if(k==='f')continue;const m=src[k]|0;if(!m)continue;const tt=((f+ +k)%12+12)%12;
-        if((m&3)===3){const p0=subRimPt(r,tt),p1=subRimPt(r,(tt+1)%12);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(p0.x,p0.y);ctx.lineTo(p1.x,p1.y);ctx.closePath();ctx.fill();ctx.stroke();}
-        else{ctx.beginPath();shardPieceInto(ctx,o0,tt,r,!!(m&2));ctx.fill();ctx.stroke();}}
+    ctx.strokeStyle='rgba(200,215,240,.4)';ctx.fillStyle='rgba(255,255,255,.06)';const rx=700,ry=y-13;ctx.fillRect(rx,ry,30,26);ctx.strokeRect(rx,ry,30,26);ctx.fillStyle='#cfe0ff';ctx.font='13px ui-sans-serif';ctx.textAlign='center';ctx.fillText('↺',rx+15,y+5);ctx.textAlign='left';_shapeHit.push({reset:t,x:rx,y:oy+ry,w:30,h:26});
+    [[0,'s',150],[Math.PI/6,'c',310]].forEach(([aF,vr,x])=>{const f=facingFacet(aF);_shapeHit.push({type:t,variant:vr,x,y:oy+y,r,f});
+      ctx.save();ctx.translate(x,y);grid(r,false);paint(t,vr,f,r);
       const activeF=bodyFire(t,vr),rDot=r*1.28;
       for(let j=0;j<12;j++){
         const aim=rimAngle(f+j),isActive=(((j%12)+12)%12)===activeF;
         ctx.beginPath();ctx.arc(Math.cos(aim)*rDot,Math.sin(aim)*rDot,r*.15,0,7);
-        if(isActive){ctx.fillStyle='rgba(190,235,255,.95)';ctx.fill();}
+        if(isActive){ctx.fillStyle=activeF?'#ffcf6a':'rgba(190,235,255,.95)';ctx.fill();}   /* amber = bent barrel, pale = straight, matching the in-game nub */
         else{ctx.strokeStyle='rgba(190,235,255,.3)';ctx.lineWidth=1.5;ctx.stroke();}
       }
+      ctx.restore();});
+    [[Math.PI/3,'s',470],[Math.PI/2,'c',546]].forEach(([aF,vr,x])=>{const f=facingFacet(aF),r2=16;   /* read-only proof columns: the SAME s/c art at the next two facings (60=side art rotated one hex-symmetry step, 90=corner art rotated). No hit cell on purpose -- edit the two on the left, these follow */
+      ctx.save();ctx.translate(x,y);grid(r2,true);paint(t,vr,f,r2);
+      const po=bodyFire(t,vr);if(po){const pp=subRimPt(r2*1.06,(f+po)%12);ctx.fillStyle='#ffcf6a';ctx.beginPath();ctx.arc(pp.x,pp.y,r2*.16,0,7);ctx.fill();}
       ctx.restore();});});
-  ctx.fillStyle='#9fb3d9';ctx.font='10.5px ui-sans-serif';ctx.fillText('tap a piece to toggle (rim / core are separate) · outer dot ring = MUZZLE PORT (where fire exits · 3 clicks = 90° bent barrel) · ↺ resets · * = hand-edited',126,H-10);ctx.restore();}
+  ctx.fillStyle='#9fb3d9';ctx.font='10.5px ui-sans-serif';ctx.fillText('tap a piece to toggle (rim / core separate) · dot ring = MUZZLE PORT: where fire, laser + vision exit (3 over = 90° bent barrel, lefties mirror) · ↺ resets · * = hand-edited',110,H-24);
+  ctx.fillText('the 60°/90° columns are the same two drawings auto-rotated — every one of the 12 facings comes from just SIDE + CORNER',110,H-10);ctx.restore();}
 function shapeTap(px,py){for(const cell of _shapeHit){if(cell.reset!=null){if(px>=cell.x&&px<=cell.x+cell.w&&py>=cell.y&&py<=cell.y+cell.h){delete BODYPAT[cell.reset+'|s'];delete BODYPAT[cell.reset+'|c'];saveBodyPat();draw();return;}continue;}
     const dx=px-cell.x,dy=py-cell.y,dist=Math.hypot(dx,dy);if(dist>cell.r*1.5)continue;
     const tt=shardIdxOf(Math.atan2(dy,dx)),key=((tt-cell.f)%12+12)%12,kk=cell.type+'|'+cell.variant;
