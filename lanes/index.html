@@ -1522,7 +1522,11 @@ function drawPeekEdges(u,facing){if(!u||!u.alive)return;const c=centers[u.hex];i
     for(const t of lit){const p=triWedgePoints(wc,R,t.k);ctx.beginPath();ctx.moveTo(p[1].x,p[1].y);ctx.lineTo(p[2].x,p[2].y);ctx.stroke();}
     ctx.restore();}}   // lights the actual triangle wedges of the wall hex that face the current line of sight, so angled peeks show a true 3-of-6 half instead of a snapped freeform patch
 function drawTriBeing(col,type,a,dim,mir,al){const R=HEXR*.95,ps0=beingPieces(type,a,mir),dark='#07131f',o0={x:0,y:0};ctx.save();ctx.globalAlpha=dim?.42:1;ctx.lineJoin='round';   /* a being IS a set of 24-shard pieces of its own hex; WHICH pieces = its class silhouette (BEING_SHAPE default, BODYPAT once hand-edited on the shape sheet) */
-  const ps=[];for(const p of ps0){const o=p.outer&&!(al&&(al&alBit(p.rel,false))),i2=p.inner&&!(al&&(al&alBit(p.rel,true)));if(o||i2)ps.push({t:p.t,outer:o,inner:i2});}   /* SHARD ARMOR: broken plates vanish -- a shot-up being visibly erodes toward nothing */
+  const ps=[],gh=[];for(const p of ps0){const o=p.outer&&!(al&&(al&alBit(p.rel,false))),i2=p.inner&&!(al&&(al&alBit(p.rel,true)));if(o||i2)ps.push({t:p.t,outer:o,inner:i2});
+    const go=p.outer&&!o,gi=p.inner&&!i2;if(go||gi)gh.push({t:p.t,outer:go,inner:gi});}   /* SHARD ARMOR: broken plates become a pale GHOST of themselves (Ian: the original shape must stay readable -- no going back to the letters), surviving plates keep the team color on top */
+  if(gh.length){ctx.fillStyle='rgba(226,233,245,.13)';ctx.strokeStyle='rgba(226,233,245,.3)';ctx.lineWidth=.9;
+    for(const pc of gh){const t=pc.t;if(pc.outer&&pc.inner){const p0=subRimPt(R,t),p1=subRimPt(R,(t+1)%12);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(p0.x,p0.y);ctx.lineTo(p1.x,p1.y);ctx.closePath();ctx.fill();ctx.stroke();}
+      else{ctx.beginPath();shardPieceInto(ctx,o0,t,R,pc.inner);ctx.fill();ctx.stroke();}}}
   ctx.fillStyle=col;ctx.strokeStyle=dark;ctx.lineWidth=1.6;
   for(const pc of ps){const t=pc.t;if(pc.outer&&pc.inner){const p0=subRimPt(R,t),p1=subRimPt(R,(t+1)%12);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(p0.x,p0.y);ctx.lineTo(p1.x,p1.y);ctx.closePath();ctx.fill();ctx.stroke();}
     else{ctx.beginPath();shardPieceInto(ctx,o0,t,R,pc.inner);ctx.fill();ctx.stroke();}}
