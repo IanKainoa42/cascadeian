@@ -1679,12 +1679,12 @@ function shardPatternPieces(weapon,aIn,aOut,k,d,mir,term){const m=x=>((x%12)+12)
   else idx=[sIn,sOut];
   const core=new Set([sOut,sIn]),seen=new Set(),out=[];for(const t of idx){if(seen.has(t))continue;seen.add(t);out.push({t,outer:true,inner:core.has(t)});}return out;}
 function drawShardFire(now){if(!EXP.shardFire||!shotFx.length)return;ctx.save();ctx.lineCap='round';ctx.lineJoin='round';   /* ELECTRIC BEAMS (Ian): "narrow... frilly... beams of electricity, not lit-up patterns a whole hexagon wide" -- the lane is now a thin jagged arc with class-flavored spray (sniper tightest, burst most sprayed), short frill ticks where the pattern would clip a body, and a compact crackle at impact spun by the shot's pr. The RULES (graze, armor plates) still use the exact shardPatternPieces math -- only the paint changed */
-  const AMP={sniper:.09,rifle:.17,shotgun:.24,shield:.28,burst:.34};
+  const AMP={sniper:.022,rifle:.042,shotgun:.06,shield:.07,burst:.085};   /* quartered (Ian: "the wiggles... cut in half, like four times -- a shot you can barely even process") -- a fast crack of light, class flavor kept in the ratios */
   const jag=(x0,y0,x1,y1,amp,seed)=>{const dx=x1-x0,dy=y1-y0,len=Math.hypot(dx,dy)||1,px=-dy/len,py=dx/len,nSeg=Math.max(2,Math.round(len/(HEXR*.55)));ctx.beginPath();ctx.moveTo(x0,y0);
     for(let i2=1;i2<nSeg;i2++){const t2=i2/nSeg,off=amp*Math.sin(seed*7.13+i2*2.9+now/95)*Math.sin(t2*Math.PI);ctx.lineTo(x0+dx*t2+px*off,y0+dy*t2+py*off);}
     ctx.lineTo(x1,y1);ctx.stroke();};
-  for(const s of shotFx){if(s.weapon==='zomboid')continue;const age=now-s.t-(s.delay||0),tm=s.travelMs||300;if(age<0||age>tm+520)continue;const A0=centers[s.from],B=centers[s.to];if(!A0||!B)continue;const A=s.mz?{x:A0.x+s.mz.x,y:A0.y+s.mz.y}:A0;
-    const th=Math.atan2(B.y-A.y,B.x-A.x),L=Math.hypot(B.x-A.x,B.y-A.y)||1,col=s.col,amp=HEXR*(AMP[s.weapon]??.18),fade=age<tm?1:Math.max(0,1-(age-tm)/520),boost=EXP.shardOnly?1.35:1;
+  for(const s of shotFx){if(s.weapon==='zomboid')continue;const age=now-s.t-(s.delay||0),tm=s.travelMs||300;if(age<0||age>tm+170)continue;const A0=centers[s.from],B=centers[s.to];if(!A0||!B)continue;const A=s.mz?{x:A0.x+s.mz.x,y:A0.y+s.mz.y}:A0;   /* afterglow snaps out in ~170ms -- it should ZIP */
+    const th=Math.atan2(B.y-A.y,B.x-A.x),L=Math.hypot(B.x-A.x,B.y-A.y)||1,col=s.col,amp=HEXR*(AMP[s.weapon]??.18),fade=age<tm?1:Math.max(0,1-(age-tm)/170),boost=EXP.shardOnly?1.35:1;
     let ri=0;
     for(const[ra,rl]of shardRays(s.weapon,th,L)){ri++;
       const walk=beamHexes(A,ra,rl,s.from,units[s.shooter]?.hand),cut=walk.cut,frills=[];
