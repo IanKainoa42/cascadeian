@@ -442,7 +442,7 @@ let EXP=Object.assign({},EXP_DEFAULTS);
 try{const _es=localStorage.getItem('hsl_exp');if(_es)EXP=Object.assign({},EXP_DEFAULTS,JSON.parse(_es));}catch(e){}
 for(const _bk of EXP_BAKED)EXP[_bk]=true;   /* baked flags win over any stale saved-off value -- a device that toggled these off during the experiment era comes back to the real game */
 if(!EXP._so2){EXP.shardOnly=false;EXP._so2=1;try{localStorage.setItem('hsl_exp',JSON.stringify(EXP));}catch(e){}}   /* one-time migration: shardOnly spent a day baked-true, so stored panels have it on -- reset to the new bolts-first default once, then the panel rules */
-const TUNE_DEFAULTS={boltLen:1,joltMs:95,floatMs:340,joltHexes:2,zoomMax:1.6,moveMul:1};   /* FEEL DIALS (Ian: "give me a bunch of settings to tweak, and I'll tell you which ones I want") -- live sliders in the experiments panel, saved per device. These are the numbers we kept re-shipping one at a time; now he turns them himself */
+const TUNE_DEFAULTS={boltLen:1.35,joltMs:55,floatMs:740,joltHexes:2,zoomMax:1.45,moveMul:0.9};   /* Ian's dialed-in values, harvested 2026-07-13 from his live device -- STANDING RULE: before every ship, read his current dials and bake them here. His feel IS the default */   /* FEEL DIALS (Ian: "give me a bunch of settings to tweak, and I'll tell you which ones I want") -- live sliders in the experiments panel, saved per device. These are the numbers we kept re-shipping one at a time; now he turns them himself */
 let TUNE=Object.assign({},TUNE_DEFAULTS);
 try{const _ts=localStorage.getItem('hsl_tune');if(_ts)TUNE=Object.assign({},TUNE_DEFAULTS,JSON.parse(_ts));}catch(e){}
 function saveTune(){try{localStorage.setItem('hsl_tune',JSON.stringify(TUNE));}catch(e){}}
