@@ -647,11 +647,14 @@ function cameraUnits(){if(!S)return[];let teams=[];
   else teams=humanTeamsAlive();
   const groups=new Set(teams.map(allyOf));return units.filter(u=>u.alive&&(teams.includes(u.team)||groups.has(allyOf(u.team))));}
 function viewCamera(){const full={z:viewZoom(),x:cx,y:cy,sx:cx,sy:cy,mode:'full'};if(cameraMode==='full'||!S||tbWaiting())return full;   // waiting out another seat -> pull back to the whole map so you see everything going on
-  const us=cameraUnits();if(!us.length)return full;let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
+  const us=cameraUnits();if(!us.length)return full;let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9,mnxP=1e9,mnyP=1e9,mxxP=-1e9,mxyP=-1e9;
   for(const u of us){const c=unitRenderPos(u),reach=(WEAP[u.type]?.range||3)*HEXR*1.55;
-    mnx=Math.min(mnx,c.x-reach);mny=Math.min(mny,c.y-reach);mxx=Math.max(mxx,c.x+reach);mxy=Math.max(mxy,c.y+reach);}   // frame by each trooper's POTENTIAL range in every direction, not their current facing -- a swivel scanning a new lane changes aim angle every frame, so a facing-projected reach dragged the pan/zoom along for the ride ("plinko rollercoaster"). Symmetric reach means panning never moves the frame; only actual movement or a range change does
-  const frame=cameraFrame(),pad=HEXR*2.15,w=Math.max(HEXR*4,mxx-mnx+pad*2),h=Math.max(HEXR*4,mxy-mny+pad*2),fw=frame.right-frame.left,fh=frame.bottom-frame.top,z=Math.max(1,Math.min(2.35,fw/w,fh/h)),sx=(frame.left+frame.right)/2,sy=(frame.top+frame.bottom)/2;
-  return{z:Math.max(viewZoom(),z),x:(mnx+mxx)/2,y:(mny+mxy)/2,sx,sy,mode:'team'};}   // default: fit your local/active squad's positions AND line-of-sight reach, not just their positions
+    mnx=Math.min(mnx,c.x-reach);mny=Math.min(mny,c.y-reach);mxx=Math.max(mxx,c.x+reach);mxy=Math.max(mxy,c.y+reach);
+    mnxP=Math.min(mnxP,c.x);mnyP=Math.min(mnyP,c.y);mxxP=Math.max(mxxP,c.x);mxyP=Math.max(mxyP,c.y);}   // symmetric (facing-free) bounds, so panning never jitters the frame; only movement does
+  const frame=cameraFrame(),pad=HEXR*2.15,w=Math.max(HEXR*4,mxx-mnx+pad*2),h=Math.max(HEXR*4,mxy-mny+pad*2),fw=frame.right-frame.left,fh=frame.bottom-frame.top,sx=(frame.left+frame.right)/2,sy=(frame.top+frame.bottom)/2;
+  const wp=Math.max(HEXR*5,mxxP-mnxP+HEXR*6.5),hp=Math.max(HEXR*5,mxyP-mnyP+HEXR*6.5),zR=Math.min(fw/w,fh/h),zP=Math.min(fw/wp,fh/hp);
+  const z=Math.max(1,Math.min(2.35,Math.max(zR,Math.min(2,zP))));   /* ZOOM: reach-fit when it fits, but NEVER stuck at 1 because a sniper's range bubble outgrows the canvas (Ian, iPhone: "why is it zoomed out so far") -- the squad's actual POSITIONS always fill the frame up to 2x; reach framing only ever zooms further OUT than that, not in */
+  return{z:Math.max(viewZoom(),z),x:(mnxP+mxxP)/2,y:(mnyP+mxyP)/2,sx,sy,mode:'team'};}   // centered on the squad itself; the old reach-bbox center dragged the board off toward wherever the longest gun pointed
 function stepCamera(){const t=viewCamera();if(!_camNow){_camNow={z:t.z,x:t.x,y:t.y,sx:t.sx,sy:t.sy,mode:t.mode};return _camNow;}   // ease the on-screen camera toward the target so turn/phase changes glide instead of snapping
   const k=.16,near=(a,b,e)=>Math.abs(a-b)<e;_camNow.z+=(t.z-_camNow.z)*k;_camNow.x+=(t.x-_camNow.x)*k;_camNow.y+=(t.y-_camNow.y)*k;_camNow.sx+=(t.sx-_camNow.sx)*k;_camNow.sy+=(t.sy-_camNow.sy)*k;_camNow.mode=t.mode;
   if(near(_camNow.x,t.x,.3)&&near(_camNow.y,t.y,.3)&&near(_camNow.z,t.z,.002)){_camNow.x=t.x;_camNow.y=t.y;_camNow.z=t.z;_camNow.sx=t.sx;_camNow.sy=t.sy;}   // snap the last hair so it settles exactly
