@@ -247,9 +247,19 @@
   .tipline{margin:0;font-size:10.5px;line-height:1.35;color:#a9b8d6;display:flex;gap:7px;align-items:baseline;text-shadow:0 1px 6px #000}   /* rotating hint line -- deliberately quieter than the copy above it, one clear step down, never a second headline */
   .tipline b{flex-shrink:0;font-size:8.5px;font-weight:800;letter-spacing:.1em;color:#7de8f5}
   .tipline:empty{display:none}
-  .home-tip{max-width:min(430px,calc(100vw - 40px));margin:8px auto 0;text-align:left;padding:0 4px}
-  #regroupTip{margin-top:3px;max-width:min(420px,calc(100vw - 120px))}
-  @media (max-width:430px){#regroupTip{display:none}}   /* phone portrait: the regroup toast is already a two-line block pinned under the status bar and a third line pushes it into the board. The home-screen tip still rotates there, so no tip is lost -- only this surface stands down. */
+  .home-tip{max-width:min(430px,calc(100vw - 40px));margin:6px auto 0;text-align:left;padding:0 4px}
+  /* ONE CARD, so the diagram + its sentence read as a deliberate "here is a mechanic" panel instead of stray marks floating over the ambient home art (which is a full-bleed animated canvas behind everything). Without the backing this was invisible-as-signal even though it rendered fine. */
+  .tip-card{width:min(430px,calc(100vw - 32px));margin:14px auto 0;padding:10px 12px 11px;
+    background:rgba(7,12,24,.72);border:1px solid rgba(94,224,240,.20);border-radius:14px;
+    backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+  .tip-art{display:block;width:100%;height:110px}
+  .tip-card .home-tip{margin:8px 0 0;max-width:none;padding:0}   /* the DEMONSTRATION surface -- a sparse outline diagram of whatever the current tip describes, animated. Drawn from the existing loop()'s onHome branch, never its own rAF (see the one-rAF-per-frame rule). CSS size only; the backing store is set in drawTipArt at devicePixelRatio. */
+  /* THE IN-MATCH TIP IS ITS OWN BAR, not a third line inside the toast pill (fixed 2026-07-31). It used to live inside .regroup-toast-text, which is a narrow content-sized flex column -- a full sentence in there took the toast from 105px to 287px tall inside a 210px-wide column on a 393px phone. So it had been given `@media (max-width:430px){display:none}`, which meant Ian saw NO in-match tips at all on his iPhone across builds 135-139. Now it is absolutely positioned under the banner with real width, so it reads on a phone and the toast keeps its shape. */
+  #regroupTip{position:absolute;top:calc(10px + var(--sat) + 62px);left:50%;transform:translateX(-50%);z-index:20;pointer-events:none;
+    width:min(420px,calc(100vw - 24px - var(--sal) - var(--sar)));padding:7px 10px;
+    background:rgba(6,10,20,.82);border:1px solid rgba(94,224,240,.28);border-radius:11px;
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  #regroupTip:empty{display:none}   /* the ONLY visibility gate -- updatePhaseUI writes the tip on entering regroup and clears it on every other phase. There is no body data-phase attribute in this file (checked), so do not reach for one. */
   #setupBanner{top:calc(76px + var(--sat));bottom:auto;flex-direction:column;text-align:center;gap:8px;border-radius:16px;border-color:rgba(94,224,240,.45);padding:12px 22px;max-width:min(92%,360px)}
   #setupBanner.anchor-bottom{top:auto;bottom:calc(86px + var(--sab))}
   #setupBanner .regroup-toast-text{text-align:center;align-items:center}
@@ -475,7 +485,10 @@
     <div class="wordsub">TACTICS</div>
   </div>
   <div id="homeRecord" class="home-rec" style="display:none"></div>
-  <div id="homeTip" class="tipline home-tip"></div>
+  <div class="tip-card" id="tipCard">
+    <canvas id="tipArt" class="tip-art" aria-hidden="true"></canvas>
+    <div id="homeTip" class="tipline home-tip"></div>
+  </div>
   <div class="hexwrap"><button id="playHex">▶ PLAY</button></div>
   <button class="chip-link" id="resumeChip" style="display:none">RESUME BATTLE</button>
   <button class="chip-link" id="mpResumeChip" style="display:none">REJOIN ROOM</button>
@@ -621,7 +634,8 @@
   <div id="dock"></div>
 
   <div class="countdown-pod" id="countdownPod"><span id="countdownNum">3</span></div>
-  <div class="regroup-toast" id="regroupBanner"><div class="regroup-toast-text"><h2 id="regroupTitle">Wave complete</h2><p id="regroupSub"></p><p class="tipline" id="regroupTip"></p></div><button class="btn" id="regroupReadyBtn">Ready</button></div>
+  <div class="regroup-toast" id="regroupBanner"><div class="regroup-toast-text"><h2 id="regroupTitle">Wave complete</h2><p id="regroupSub"></p></div><button class="btn" id="regroupReadyBtn">Ready</button></div>
+  <div class="tipline" id="regroupTip"></div>
   <div class="regroup-toast" id="setupBanner"><div class="regroup-toast-text"><h2 id="setupTitle">Set your formation</h2><p id="setupSub">Place every trooper inside your glowing corner zone.</p></div><button class="btn" id="setupStartBtn">START BATTLE</button></div>
 
   <div class="banner" id="banner">
@@ -1588,7 +1602,7 @@ function updatePhaseUI(){if(!S)return;const lab=document.getElementById('phaseLa
   {const fb=document.getElementById('ffBtn');if(fb){const show=aiOnlyBattle()&&rt.running;fb.style.display=show?'':'none';if(!show&&rt.ff)rt.ff=false;fb.textContent=rt.ff?`FF ${FF_RATE}×`:'FF';fb.classList.toggle('on',!!rt.ff);}}   /* the toggle self-clears the moment the battle stops being AI-only (a wave respawns you, the match ends), so a stale 4x can never carry into a round you are actually playing */
   clock.classList.remove('turn-pulse');clock.style.color='';   // reset every call -- only the turn-based branch below re-arms the pulse, so it never lingers into other phases
   const sheetOpen=document.body.classList.contains('sheet-open');
-  if(S.over){lab.textContent='Battle over';clock.textContent='—';pb.style.display='none';rb.style.display='none';regroupBanner.classList.remove('show');setupBanner.classList.remove('show');return;}
+  if(S.over){lab.textContent='Battle over';clock.textContent='—';pb.style.display='none';rb.style.display='none';regroupBanner.classList.remove('show');{const _rt=document.getElementById('regroupTip');if(_rt&&_rt.textContent)_rt.textContent='';}   /* clear the in-match tip whenever we are not in regroup -- :empty is its only visibility gate */ setupBanner.classList.remove('show');return;}
   if(rt.phase==='regroup'){const left=Math.max(0,regroupDur()-rt.phaseMs),humans=humanTeamsAlive(),readyN=humans.filter(t=>rt.ready.has(t)).length,mine=S.current,amReady=isHumanTeam(mine)&&rt.ready.has(mine);
     lab.textContent='Regroup';clock.textContent=`${Math.ceil(left/1000)}s`;pb.style.display='none';rb.style.display='';
     const readyLabel=humans.length>1?`${amReady?'Ready ✓':'Ready'} (${readyN}/${humans.length})`:(amReady?'Ready ✓':'Ready');
@@ -1597,7 +1611,7 @@ function updatePhaseUI(){if(!S)return;const lab=document.getElementById('phaseLa
     regroupSub.textContent=`Wave ${rt.wave} done. Plan your moves${humans.length>1?`, ${readyN}/${humans.length} ready`:''} — the board still works.`;
     {const _rt=document.getElementById('regroupTip'),_h=regroupTipHtml();if(_rt&&_rt.innerHTML!==_h)_rt.innerHTML=_h;}   /* innerHTML written only when the latched tip actually changes -- this block runs every frame */
     regroupReadyBtn.textContent=readyLabel;regroupReadyBtn.classList.toggle('active',amReady);setupBanner.classList.remove('show');return;}
-  rb.style.display='none';regroupBanner.classList.remove('show');
+  rb.style.display='none';regroupBanner.classList.remove('show');{const _rt=document.getElementById('regroupTip');if(_rt&&_rt.textContent)_rt.textContent='';}   /* clear the in-match tip whenever we are not in regroup -- :empty is its only visibility gate */ 
   if(rt.phase==='setup'){
     lab.textContent='Setup';clock.textContent='—';pb.style.display='none';setupBanner.classList.toggle('show',!sheetOpen);
     const team=setupCurrentTeam(),placed=team==null?{inside:0,total:0}:setupPlacementCount(team),valid=team!=null&&setupTeamValid(team),humans=humanTeamsAlive(),readyN=humans.filter(t=>rt.ready.has(t)).length,amReady=team!=null&&rt.ready.has(team),multi=mp.active||humans.length>1,zone=team==null?null:deploymentZoneFor(team);setupBanner.classList.toggle('anchor-bottom',!!(zone&&centers[zone.center]&&centers[zone.center].y<cy));
@@ -2858,7 +2872,7 @@ function tbPointerUp(up,wasDraw,path,wasUnit,gestureUnit=-1){if(!tb)return;
   if(wasUnit){if(tb.picking&&tb.picking.unit===S.sel&&hui===S.sel){tbCommitSight(S.sel);return;}if(_downAlreadySel&&!wasDraw){orderFlip(gestureUnit>=0?gestureUnit:S.sel);renderStatus();return;}renderStatus();return;}   // tap your own trooper: select (pointerdown), or FLIP the gun hand on a re-tap (Ian: "clicking the trooper doesn't flip left/right in TB" -- mirrors the RT re-tap-flip), or lock facing if sight is being aimed
   const su=S.sel!=null?units[S.sel]:null;
   if(tb.picking&&su&&tb.picking.unit===S.sel&&tbCanSetSight(su)){tbCommitSightAt(S.sel,up);return;}               // sight-picking works even off-turn (SEQ) -- handled BEFORE the your-turn gate below
-  if(!su||!tbCanCommand(su)){renderStatus();return;}
+  if(!su||!tbCanCommand(su)){if(su&&su.alive&&h>=0&&isMyTeam(su.team)&&!tbIsStunned(su)){orderLook(S.sel,up);return;}renderStatus();return;}   /* AIMING IS FREE OFF-TURN TOO (Ian 2026-07-31: "you should be able to flip guns on whatever side in turn-based. Pretty much the thing that is locked in turn-based is the movement"). Turning a trooper already cost nothing -- but it sat BEHIND the tbCanCommand gate, which requires u.team===tb.seat, so you could only re-aim during your own turn. Sight-setting has always been the opposite (tbCanSetSight deliberately drops the seat check so lanes can be laid off-turn), which made the two most similar free actions behave inconsistently. Now they match: your own trooper can be pointed anywhere at any time, while MOVE / SHOOT / PUSH stay turn-gated and priced exactly as before. Still refused while stunned (a lost turn means a lost turn), and orderLook routes through orderFocus, so a multiplayer joiner's re-aim goes to the host rather than being applied locally. */
   if(hu&&nzCanKick(S.sel,hui)){nzOrderKick(S.sel,hui);return;}   /* TAP THE OFFENDER = THROW THE FLAG. Deliberately ahead of the shoot branch: an enemy standing in your neutral zone is answered by kicking it out, not by spending an action shooting it point-blank. Costs nothing (Ian's call -- it is a penalty, not a down), and the flag clears on contact, so the next tap on that trooper shoots normally. */
   if(hu&&allyOf(hu.team)!==allyOf(su.team)&&tbUnitCanAct(su)&&tbCanShoot(su)&&tbTargets(S.sel).some(t=>t.i===hui)){tbOrderShoot(S.sel,hui);return;}   // tap a SHOOTABLE enemy = spend an action on the shot
   if(tb.picking&&tb.picking.unit===S.sel){tbCommitSightAt(S.sel,up);return;}                                  // sight-picking owns the board until you confirm -- taps add/remove lanes (free)
@@ -2905,7 +2919,7 @@ function openOnboarding(force=false){if(!force&&onboardingSeen())return false;co
 function closeOnboarding(markSeen=true){const el=document.getElementById('onboarding');if(!el)return;if(markSeen)saveOnboardingSeen();el.classList.remove('show');el.setAttribute('aria-hidden','true');document.getElementById('playHex')?.focus();}
 function advanceOnboarding(dir){const last=document.querySelectorAll('.onboard-panel').length-1;if(dir>0&&onboardStep===last){closeOnboarding();startFlow(1);return;}onboardStep=Math.max(0,Math.min(last,onboardStep+dir));renderOnboarding();}
 
-function setScreen(name){document.body.dataset.screen=name;if(name==='home'){try{const _ht=document.getElementById('homeTip');if(_ht)_ht.innerHTML=tipHtml(nextTip());}catch(e){}}   /* try/catch guards the temporal dead zone: setScreen is DECLARED above the TIPS const, so a home route taken during early boot would otherwise throw on a purely cosmetic line and take the rest of the init down with it. */   /* one fresh tip per visit to the home screen -- setScreen is the single chokepoint every route home passes through (first load, back out of setup, end of a match), so the line has genuinely rotated by the time he looks at it again */if(typeof adaptCanvasResolution==='function')adaptCanvasResolution();if(typeof musicSet==='function'&&_musicMode!=null)musicSet(name==='battle'?'game':'menu');   // swap the soundtrack set when entering/leaving battle (only once music has started)
+function setScreen(name){document.body.dataset.screen=name;if(name==='home'){try{const _ht=document.getElementById('homeTip');if(_ht)_ht.innerHTML=setTip(nextTip());_tipRot=0;}catch(e){}}   /* try/catch guards the temporal dead zone: setScreen is DECLARED above the TIPS const, so a home route taken during early boot would otherwise throw on a purely cosmetic line and take the rest of the init down with it. */   /* one fresh tip per visit to the home screen -- setScreen is the single chokepoint every route home passes through (first load, back out of setup, end of a match), so the line has genuinely rotated by the time he looks at it again */if(typeof adaptCanvasResolution==='function')adaptCanvasResolution();if(typeof musicSet==='function'&&_musicMode!=null)musicSet(name==='battle'?'game':'menu');   // swap the soundtrack set when entering/leaving battle (only once music has started)
   if(name==='battle'&&mp.active&&mp.isHost&&mp.stage==='lobby'){mp.stage='live';mpSync();chatSys('Battle started — deploy your squad.');}   /* ONE chokepoint flips the room live: however the host reaches the battlefield (Start Battle, Play, resume), guests' screens follow the stage in the next snapshot -- no separate "did we start yet" bookkeeping anywhere else */
   if(name==='home'){if(S&&!S.over&&rt.phase==='combat'&&rt.running&&(!mp.active||mp.isHost))toggleRun(false);   // stepping out mid-battle pauses the sim (host/local only -- a peer's board keeps streaming from the host)
     const rc=document.getElementById('resumeChip');if(rc){const on=S&&!S.over&&rt.wave>0;rc.style.display=on?'':'none';if(on)rc.textContent=rt.phase==='turns'?`RESUME BATTLE · ROUND ${(tb&&tb.round)||1}`:`RESUME BATTLE · WAVE ${rt.wave}`;}   /* turn-based boards count Rounds, never Waves -- the chip must speak the same language as the battle it resumes */
@@ -3177,39 +3191,135 @@ function saveGuide(){try{localStorage.setItem('hsl_guidance_v1',JSON.stringify(g
 function guideMark(key){if(!guideState[key]){guideState[key]=true;saveGuide();renderGuidance();}}
 /* ===================== ROTATING TIPS — one line per maneuver that buys fire rate, movement or defense (Ian 2026-07-30: "a series of rotating hints and tips for every maneuver or skill that increases fire rate, movement speed, or defense"). Shown on the HOME screen and during REGROUP, deliberately not mid-combat: the board is meant to stay quiet and glanceable, and the bottom band was just cleared for the dock. Keep every line true to the live numbers -- a stale tip is worse than no tip. ===================== */
 const TIPS=[
-  {a:'FIRE',t:'Walls speed your trigger. One adjacent wall reloads about 17% faster; three walls, 50%. Fight from cover, not beside it.'},
-  {a:'FIRE',t:'SUPPRESS doubles your rate of fire for ten seconds — and anyone crossing the lane is pinned where they stand.'},
-  {a:'FIRE',t:'A sniper with its shoulder on a wall cycles 28% faster on top of the wall bonus. No class gains more from planting.'},
-  {a:'FIRE',t:'Firing on the march doubles your reload and widens your aim. Plant to put real rounds down.'},
-  {a:'FIRE',t:'Taking a hit costs you a beat before you can answer — halved if you are braced against a wall.'},
-  {a:'FIRE',t:'A sprinting trooper cannot shoot at all. That is the price of the dash.'},
-  {a:'FIRE',t:'Burst and SMG fire several rounds per pull. Against one enemy in the open, the whole volley lands on them.'},
-  {a:'MOVE',t:'Move as a squad. A teammate within three hexes shortens your move cooldown — 30% faster at one hex, 20% at two, 10% at three.'},
-  {a:'MOVE',t:'Cohesion reaches three hexes, so you never have to bunch up to get it. Only your nearest teammate counts — a loose formation moves as fast as a huddle.'},
-  {a:'MOVE',t:'Drift out of cohesion range mid-route and the speed bonus is gone on the very next hex. Keep the squad travelling together.'},
-  {a:'MOVE',t:'The first two hexes of any order you give are a full sprint. Short repositioning is meant to be quick.'},
-  {a:'MOVE',t:'Shouldering a wall forward costs one step — the same as walking. Build your own cover line as you advance.'},
-  {a:'MOVE',t:'Shields never sprint. Start their routes earlier than everyone else’s.'},
-  {a:'MOVE',t:'Pinned troopers can fall back but never forward. Suppression takes ground without taking a life.'},
-  {a:'MOVE',t:'In Teleport, one to three hexes costs almost nothing. Past that, every extra hex costs disproportionately more.'},
-  {a:'MOVE',t:'Warp recharge reads cohesion too. Blink out from beside your squad — or blink back to it — and the recharge is shorter at either end.'},
-  {a:'HOLD',t:'Two adjacent teammates is the cohesion sweet spot. Four deep and you are one easy cluster blocking each other’s shots.'},
-  {a:'HOLD',t:'A Shield ally protects everyone around it, more than an ordinary trooper does. That is what pays for its short range.'},
-  {a:'HOLD',t:'Cover is directional. A wall only shields the side it is actually on — a flanking shot goes straight past it.'},
-  {a:'HOLD',t:'Alone, in the open, with no wall and no allies is the most dangerous place on the board.'},
-  {a:'HOLD',t:'Your armour ring spins to face the last shooter, but takes a beat to react. The opening shot of a fight lands wherever the plates already were.'},
-  {a:'HOLD',t:'Sustained fire stalls the armour bearing. Hold one arc still and let someone else take the open side.'},
-  {a:'HOLD',t:'Each ring plate soaks three hits before it shatters. Killing through one arc is a race against the ring’s rotation.'},
-  {a:'HOLD',t:'Bullets travel. Step off the hex before the round arrives and it misses, however good the shot looked.'},
-  {a:'HOLD',t:'Troopers only notice what is inside their cone, or standing right on top of them. Come in outside their lanes and you are not seen at all.'},
-  {a:'HOLD',t:'A holding trooper sweeps its cone across the approaches it fears. Staying out of it buys you a window, not a cloak — read where it is looking next.'},
-  {a:'HOLD',t:'A wall at your shoulder is a fortified posture: you see further, notice sooner, and answer fire faster.'},
-  {a:'HOLD',t:'Sneak in freely — but the moment you fire, the muzzle flash tells everyone nearby exactly where you are.'}];
+  {d:'walls',a:'FIRE',t:'Walls speed your trigger. One adjacent wall reloads about 17% faster; three walls, 50%. Fight from cover, not beside it.'},
+  {d:'suppress',a:'FIRE',t:'SUPPRESS doubles your rate of fire for ten seconds — and anyone crossing the lane is pinned where they stand.'},
+  {d:'walls',a:'FIRE',t:'A sniper with its shoulder on a wall cycles 28% faster on top of the wall bonus. No class gains more from planting.'},
+  {d:'march',a:'FIRE',t:'Firing on the march doubles your reload and widens your aim. Plant to put real rounds down.'},
+  {d:'flinch',a:'FIRE',t:'Taking a hit costs you a beat before you can answer — halved if you are braced against a wall.'},
+  {d:'sprint',a:'FIRE',t:'A sprinting trooper cannot shoot at all. That is the price of the dash.'},
+  {d:'volley',a:'FIRE',t:'Burst and SMG fire several rounds per pull. Against one enemy in the open, the whole volley lands on them.'},
+  {d:'cohesion',a:'MOVE',t:'Move as a squad. A teammate within three hexes shortens your move cooldown — 30% faster at one hex, 20% at two, 10% at three.'},
+  {d:'cohesion',a:'MOVE',t:'Cohesion reaches three hexes, so you never have to bunch up to get it. Only your nearest teammate counts — a loose formation moves as fast as a huddle.'},
+  {d:'cohesion',a:'MOVE',t:'Drift out of cohesion range mid-route and the speed bonus is gone on the very next hex. Keep the squad travelling together.'},
+  {d:'sprint',a:'MOVE',t:'The first two hexes of any order you give are a full sprint. Short repositioning is meant to be quick.'},
+  {d:'wallpush',a:'MOVE',t:'Shouldering a wall forward costs one step — the same as walking. Build your own cover line as you advance.'},
+  {d:'sprint',a:'MOVE',t:'Shields never sprint. Start their routes earlier than everyone else’s.'},
+  {d:'pin',a:'MOVE',t:'Pinned troopers can fall back but never forward. Suppression takes ground without taking a life.'},
+  {d:'warp',a:'MOVE',t:'In Teleport, one to three hexes costs almost nothing. Past that, every extra hex costs disproportionately more.'},
+  {d:'warp',a:'MOVE',t:'Warp recharge reads cohesion too. Blink out from beside your squad — or blink back to it — and the recharge is shorter at either end.'},
+  {d:'cluster',a:'HOLD',t:'Two adjacent teammates is the cohesion sweet spot. Four deep and you are one easy cluster blocking each other’s shots.'},
+  {d:'shield',a:'HOLD',t:'A Shield ally protects everyone around it, more than an ordinary trooper does. That is what pays for its short range.'},
+  {d:'cover',a:'HOLD',t:'Cover is directional. A wall only shields the side it is actually on — a flanking shot goes straight past it.'},
+  {d:'exposed',a:'HOLD',t:'Alone, in the open, with no wall and no allies is the most dangerous place on the board.'},
+  {d:'armor',a:'HOLD',t:'Your armour ring spins to face the last shooter, but takes a beat to react. The opening shot of a fight lands wherever the plates already were.'},
+  {d:'armor',a:'HOLD',t:'Sustained fire stalls the armour bearing. Hold one arc still and let someone else take the open side.'},
+  {d:'armor',a:'HOLD',t:'Each ring plate soaks three hits before it shatters. Killing through one arc is a race against the ring’s rotation.'},
+  {d:'travel',a:'HOLD',t:'Bullets travel. Step off the hex before the round arrives and it misses, however good the shot looked.'},
+  {d:'cone',a:'HOLD',t:'Troopers only notice what is inside their cone, or standing right on top of them. Come in outside their lanes and you are not seen at all.'},
+  {d:'cone',a:'HOLD',t:'A holding trooper sweeps its cone across the approaches it fears. Staying out of it buys you a window, not a cloak — read where it is looking next.'},
+  {d:'walls',a:'HOLD',t:'A wall at your shoulder is a fortified posture: you see further, notice sooner, and answer fire faster.'},
+  {d:'muzzle',a:'HOLD',t:'Sneak in freely — but the moment you fire, the muzzle flash tells everyone nearby exactly where you are.'}];
+/* ===================== TIP DIAGRAMS — the "show me the mechanic" half (Ian 2026-07-31: "I have yet to see any hints, graphics, or demonstrations showing me the mechanics"). Each TIPS entry carries a `d:` kind rendered here as a small ANIMATED outline diagram beside the sentence. Deliberately sparse per the board visual language: outlines not fills, one accent colour per idea, motion that plays a beat and loops rather than flickering. Drawn from loop()'s existing onHome branch -- never its own requestAnimationFrame. ===================== */
+const TIP_ALLY='#5ee0f0',TIP_FOE='#ff3d7f',TIP_WALL='#8fa3c8',TIP_HOT='#ffc400',TIP_DIM='rgba(150,168,200,.30)';
+function _th(g,x,y,r){g.beginPath();for(let i=0;i<6;i++){const a=(60*i)*Math.PI/180,px=x+r*Math.cos(a),py=y+r*Math.sin(a);i?g.lineTo(px,py):g.moveTo(px,py);}g.closePath();}
+function _tTrooper(g,x,y,r,col,alpha=1){g.save();g.globalAlpha=alpha;g.strokeStyle=col;g.lineWidth=1.6;_th(g,x,y,r*.62);g.stroke();g.fillStyle=col;g.globalAlpha=alpha*.22;g.fill();g.restore();}
+function _tWall(g,x,y,r){g.save();g.strokeStyle=TIP_WALL;g.lineWidth=1.4;g.fillStyle='rgba(143,163,200,.16)';_th(g,x,y,r*.72);g.fill();g.stroke();g.restore();}
+function _tCone(g,x,y,ang,half,len,col,alpha=.5){g.save();g.globalAlpha=alpha;g.strokeStyle=col;g.lineWidth=1.3;g.beginPath();g.moveTo(x,y);g.arc(x,y,len,ang-half,ang+half);g.closePath();g.stroke();g.restore();}
+function _tBar(g,x,y,w,h,frac,col){g.save();g.strokeStyle=TIP_DIM;g.lineWidth=1;g.strokeRect(x,y,w,h);g.fillStyle=col;g.fillRect(x+1,y+1,Math.max(0,(w-2)*Math.min(1,Math.max(0,frac))),h-2);g.restore();}
+function _tArrow(g,x1,y1,x2,y2,col,alpha=1){g.save();g.globalAlpha=alpha;g.strokeStyle=col;g.lineWidth=1.5;g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.stroke();const a=Math.atan2(y2-y1,x2-x1);g.beginPath();g.moveTo(x2,y2);g.lineTo(x2-7*Math.cos(a-.4),y2-7*Math.sin(a-.4));g.moveTo(x2,y2);g.lineTo(x2-7*Math.cos(a+.4),y2-7*Math.sin(a+.4));g.stroke();g.restore();}
+function _tX(g,x,y,s,col){g.save();g.strokeStyle=col;g.lineWidth=1.8;g.beginPath();g.moveTo(x-s,y-s);g.lineTo(x+s,y+s);g.moveTo(x+s,y-s);g.lineTo(x-s,y+s);g.stroke();g.restore();}
+const TIP_ART={
+  walls(g,w,h,t){const cy=h/2,cx=w/2,r=19,n=1+Math.floor(t%6/2);   /* 1 -> 2 -> 3 walls, two seconds each; the cone tightens and the reload bar cycles faster with each */
+    for(let i=0;i<n;i++)_tWall(g,cx+r*1.75*Math.cos((i*120-60)*Math.PI/180),cy+r*1.75*Math.sin((i*120-60)*Math.PI/180),r);
+    _tCone(g,cx,cy,0,(.42-n*.09),74,TIP_HOT,.65);_tTrooper(g,cx,cy,r,TIP_ALLY);
+    _tBar(g,cx-34,h-15,68,7,(t*(.9+n*.55))%1,TIP_HOT);},
+  cohesion(g,w,h,t){const cy=h/2-6,r=17,d=1+Math.floor(t%8/2),cx=w/2-30;   /* nearest ally walks out 1 -> 4 hexes; the speed meter empties as it goes */
+    _tTrooper(g,cx,cy,r,TIP_ALLY);_tTrooper(g,cx+d*34,cy,r,TIP_ALLY,.85);
+    g.save();g.setLineDash([3,4]);g.strokeStyle=d<=3?TIP_HOT:TIP_DIM;g.lineWidth=1.2;g.beginPath();g.moveTo(cx+r*.7,cy);g.lineTo(cx+d*34-r*.7,cy);g.stroke();g.restore();
+    _tBar(g,w/2-34,h-15,68,7,d<=3?[0,.3,.2,.1][d]/.3:0,d<=3?TIP_HOT:TIP_DIM);},
+  cone(g,w,h,t){const cx=50,cy=h/2,sw=Math.sin(t*1.05)*.40,half=.30,len=Math.min(w-140,88);   /* len + sweep are bounded so the wedge cannot spill out of the card: max vertical reach is len*sin(sweep+half) and the card is 110px tall */   /* the watcher SWEEPS; the intruder only lights up while it is genuinely inside the wedge */
+    const fx=cx+len*.92,fy=cy+Math.sin(t*.62)*26,ea=Math.atan2(fy-cy,fx-cx),inside=Math.abs(ea-sw)<half;
+    g.save();g.globalAlpha=inside?.13:.07;g.fillStyle=inside?TIP_HOT:TIP_ALLY;   /* a whisper of fill only -- the outline carries it, per the sparse-outline board language */g.beginPath();g.moveTo(cx,cy);g.arc(cx,cy,len,sw-half,sw+half);g.closePath();g.fill();g.restore();
+    g.save();g.globalAlpha=inside?.9:.5;g.strokeStyle=inside?TIP_HOT:TIP_ALLY;g.lineWidth=1.5;g.beginPath();g.moveTo(cx,cy);g.arc(cx,cy,len,sw-half,sw+half);g.closePath();g.stroke();g.restore();
+    _tTrooper(g,cx,cy,18,TIP_ALLY);
+    _tTrooper(g,fx,fy,16,inside?TIP_FOE:TIP_DIM,inside?1:.45);
+    if(!inside){g.save();g.setLineDash([3,3]);g.globalAlpha=.5;g.strokeStyle=TIP_DIM;g.lineWidth=1.1;g.beginPath();g.moveTo(cx,cy);g.lineTo(fx,fy);g.stroke();g.restore();_tX(g,(cx+fx)/2,(cy+fy)/2,5,TIP_DIM);}
+  },
+  armor(g,w,h,t){const cx=w/2,cy=h/2,R=34,ph=t%4,lag=Math.max(0,Math.min(1,(ph-.8)/1.2)),aim=Math.PI+lag*Math.PI;   /* a bolt arrives, THEN the bearing swings a fresh plate onto that arc -- the delay is the ambush window */
+    for(let i=0;i<12;i++){const a=aim+i*Math.PI/6,fresh=(i===0);g.save();
+      g.globalAlpha=fresh?1:.6;g.strokeStyle=fresh?TIP_HOT:TIP_ALLY;g.lineWidth=fresh?5.5:4;g.lineCap='butt';
+      g.beginPath();g.arc(cx,cy,R,a-.215,a+.215);g.stroke();g.restore();}   /* wider arcs + a thicker stroke so twelve PLATES read as armour rather than as one dashed circle */
+    _tTrooper(g,cx,cy,16,TIP_ALLY);
+    if(ph<1.0){const bx=cx-96+(ph/1.0)*46;_tArrow(g,bx,cy,bx+30,cy,TIP_FOE);}
+    else if(ph<1.35){g.save();g.strokeStyle=TIP_FOE;g.lineWidth=2;g.globalAlpha=1-(ph-1)/.35;g.beginPath();g.arc(cx-R,cy,9,0,7);g.stroke();g.restore();}
+  },
+  sprint(g,w,h,t){const p=(t%3)/3,cx=40+p*(w-80),cy=h/2;   /* the dash: fast, hard to put a round on, and the gun is crossed out for its duration */
+    for(let i=1;i<=4;i++){g.save();g.globalAlpha=.10*(5-i);g.strokeStyle=TIP_ALLY;g.lineWidth=1.2;_th(g,cx-i*13,cy,11);g.stroke();g.restore();}
+    _tTrooper(g,cx,cy,18,TIP_ALLY);_tX(g,cx,cy-26,6,TIP_FOE);},
+  march(g,w,h,t){const cx=w/2-46,cy=h/2,wob=Math.sin(t*4)*.16;   /* firing on the move: wide, wandering cone. Planted: tight. */
+    _tCone(g,cx,cy,wob,.44,72,TIP_FOE,.5);_tTrooper(g,cx,cy,17,TIP_ALLY);_tArrow(g,cx-4,cy+28,cx+22,cy+28,TIP_DIM,.7);
+    const px=w/2+52;_tCone(g,px,cy,0,.14,72,TIP_HOT,.75);_tTrooper(g,px,cy,17,TIP_ALLY);},
+  flinch(g,w,h,t){const cx=w/2,cy=h/2-4,ph=t%3;   /* hit -> a beat you cannot answer in -> fire back */
+    _tTrooper(g,cx,cy,19,TIP_ALLY,ph<.5?.6:1);
+    if(ph<.5)_tArrow(g,cx-58,cy,cx-24,cy,TIP_FOE);
+    else if(ph<1.8)_tBar(g,cx-30,h-15,60,7,(ph-.5)/1.3,TIP_FOE);
+    else _tArrow(g,cx+24,cy,cx+62,cy,TIP_HOT);},
+  volley(g,w,h,t){const cx=52,cy=h/2;_tTrooper(g,cx,cy,18,TIP_ALLY);   /* several rounds per trigger pull */
+    for(let i=0;i<4;i++){const p=((t*1.5+i*.18)%1);g.save();g.globalAlpha=1-p*.8;g.strokeStyle=TIP_HOT;g.lineWidth=2;g.beginPath();const x=cx+24+p*(w-130);g.moveTo(x,cy+(i-1.5)*3);g.lineTo(x+13,cy+(i-1.5)*3);g.stroke();g.restore();}
+    _tTrooper(g,w-46,cy,17,TIP_FOE,.9);},
+  suppress(g,w,h,t){const cx=44,cy=h/2;_tTrooper(g,cx,cy,18,TIP_ALLY);   /* the lane is hosed; anyone crossing is pinned where they stand */
+    g.save();g.strokeStyle=TIP_HOT;g.globalAlpha=.55;g.lineWidth=1.3;g.setLineDash([5,4]);g.lineDashOffset=-t*22;g.strokeRect(cx+22,cy-15,w-cx-72,30);g.restore();
+    g.save();g.strokeStyle=TIP_HOT;g.globalAlpha=.28;g.lineWidth=1;for(let i=0;i<7;i++){const lx=cx+34+i*((w-cx-96)/6);g.beginPath();g.moveTo(lx,cy-13);g.lineTo(lx-9,cy+13);g.stroke();}g.restore();   /* hatched OUTLINE lane, not a solid amber block -- the fill read as a heavy slab against the sparse-outline board language */
+    const fx=w-58,fy=cy-30+Math.min(30,(t%3)*26);_tTrooper(g,fx,fy,16,TIP_FOE);
+    if(fy>=cy-16){g.save();g.strokeStyle=TIP_HOT;g.lineWidth=1.6;g.beginPath();g.moveTo(fx-13,fy+20);g.lineTo(fx+13,fy+20);g.stroke();g.restore();}},
+  pin(g,w,h,t){const cx=w/2,cy=h/2;_tTrooper(g,cx,cy,18,TIP_FOE);   /* pinned: forward is refused, falling back is free */
+    _tArrow(g,cx+22,cy,cx+62,cy,TIP_DIM,.55);_tX(g,cx+70,cy,7,TIP_FOE);
+    _tArrow(g,cx-22,cy,cx-64,cy,TIP_HOT);},
+  warp(g,w,h,t){const cy=h/2,x0=54,x1=w-64,p=(t%3)/3;   /* blink, then a recharge ring that is shorter when the squad is close */
+    _tTrooper(g,x0,cy,17,TIP_ALLY,p<.35?1:.25);
+    g.save();g.setLineDash([4,5]);g.strokeStyle=TIP_HOT;g.globalAlpha=.7;g.lineWidth=1.3;g.beginPath();g.moveTo(x0+18,cy);g.lineTo(x1-18,cy);g.stroke();g.restore();
+    _tTrooper(g,x1,cy,17,TIP_ALLY,p<.35?.25:1);
+    if(p>=.35){g.save();g.strokeStyle=TIP_HOT;g.lineWidth=2.4;g.beginPath();g.arc(x1,cy,25,-Math.PI/2,-Math.PI/2+((p-.35)/.65)*Math.PI*2);g.stroke();g.restore();}},
+  cluster(g,w,h,t){const cy=h/2,good=(t%6)<3,cx=w/2;   /* two adjacent = the sweet spot; four deep = one easy cluster */
+    const n=good?2:4;for(let i=0;i<n;i++){const a=(i*(360/n)-90)*Math.PI/180;_tTrooper(g,cx+Math.cos(a)*30,cy+Math.sin(a)*24,15,TIP_ALLY,.9);}
+    _tTrooper(g,cx,cy,16,TIP_ALLY);
+    g.save();g.strokeStyle=good?TIP_HOT:TIP_FOE;g.lineWidth=1.6;g.globalAlpha=.75;_th(g,cx,cy,good?46:40);g.stroke();g.restore();
+    if(!good)_tArrow(g,cx+72,cy-26,cx+34,cy-6,TIP_FOE);},
+  shield(g,w,h,t){const cx=w/2,cy=h/2;   /* a Shield ally protects everyone around it */
+    g.save();g.strokeStyle=TIP_HOT;g.globalAlpha=.30+.10*Math.sin(t*2);g.lineWidth=2;_th(g,cx,cy,42);g.stroke();g.restore();
+    _tTrooper(g,cx,cy,19,TIP_HOT);
+    for(const dx of [-34,34])_tTrooper(g,cx+dx,cy,15,TIP_ALLY,.9);},
+  cover(g,w,h,t){const cx=w/2,cy=h/2,flank=(t%4)>=2;   /* directional: the wall stops the frontal shot, the flanking one goes straight past */
+    _tWall(g,cx-30,cy,20);_tTrooper(g,cx,cy,18,TIP_ALLY);
+    if(!flank){_tArrow(g,cx-96,cy,cx-52,cy,TIP_FOE);_tX(g,cx-30,cy,8,TIP_HOT);}
+    else _tArrow(g,cx+8,cy+42,cx+2,cy+22,TIP_FOE);},
+  exposed(g,w,h,t){const cx=w/2,cy=h/2;_tTrooper(g,cx,cy,18,TIP_ALLY);   /* alone in the open: fire from every side */
+    for(let i=0;i<5;i++){const a=(i*72+t*24)*Math.PI/180;_tArrow(g,cx+Math.cos(a)*54,cy+Math.sin(a)*40,cx+Math.cos(a)*26,cy+Math.sin(a)*20,TIP_FOE,.6);}},
+  travel(g,w,h,t){const cy=h/2,p=(t%3)/3,x0=44,x1=w-56;_tTrooper(g,x0,cy,17,TIP_ALLY);   /* the round takes real time -- step off the hex and it misses */
+    const bx=x0+22+p*(x1-x0-30);g.save();g.strokeStyle=TIP_HOT;g.lineWidth=2.2;g.beginPath();g.moveTo(bx,cy);g.lineTo(bx+15,cy);g.stroke();g.restore();
+    const moved=p>.55,ty=moved?cy-26:cy;_tTrooper(g,x1,ty,16,TIP_FOE,.95);
+    if(moved){g.save();g.setLineDash([3,3]);g.strokeStyle=TIP_DIM;g.lineWidth=1.2;_th(g,x1,cy,11);g.stroke();g.restore();}},
+  wallpush(g,w,h,t){const cy=h/2,p=(t%3)/3,step=p<.5?0:1,cx=w/2-40;   /* shoulder the wall one hex and take its place */
+    _tTrooper(g,cx+step*36,cy,18,TIP_ALLY);_tWall(g,cx+36+step*36,cy,20);
+    _tArrow(g,cx+8,cy-30,cx+44,cy-30,TIP_HOT,.8);},
+  muzzle(g,w,h,t){const cx=w/2,cy=h/2,p=t%3;_tTrooper(g,cx,cy,18,TIP_ALLY);   /* firing is what gives you away */
+    if(p<.4){g.save();g.strokeStyle=TIP_HOT;g.lineWidth=2.4;g.beginPath();g.moveTo(cx+18,cy);g.lineTo(cx+40,cy);g.stroke();g.restore();}
+    if(p>=.4&&p<2.2){const rr=(p-.4)/1.8;g.save();g.globalAlpha=(1-rr)*.8;g.strokeStyle=TIP_FOE;g.lineWidth=1.8;_th(g,cx,cy,20+rr*54);g.stroke();g.restore();}}
+};
+let _tipT=0,_tipRot=0,_tipArtKind=null;
+function setTip(tip){_tipArtKind=tip.d||null;_tipT=0;return tipHtml(tip);}
+function drawTipArt(dt){const c=document.getElementById('tipArt');if(!c||!_tipArtKind||!TIP_ART[_tipArtKind])return;
+  _tipT+=dt/1000;
+  const dpr=Math.min(2,window.devicePixelRatio||1),W=c.clientWidth,H=c.clientHeight;if(!W||!H)return;
+  if(c.width!==Math.round(W*dpr)||c.height!==Math.round(H*dpr)){c.width=Math.round(W*dpr);c.height=Math.round(H*dpr);}
+  const g=c.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
+  try{TIP_ART[_tipArtKind](g,W,H,_tipT);}catch(e){_tipArtKind=null;}   /* a diagram must never be able to take the home screen down -- drop it and carry on */
+}
 let _tipN=0;try{_tipN=parseInt(localStorage.getItem('hsl_tip')||'0',10)||0;}catch(e){}
 function nextTip(){const t=TIPS[((_tipN%TIPS.length)+TIPS.length)%TIPS.length];_tipN=(_tipN+1)%TIPS.length;try{localStorage.setItem('hsl_tip',String(_tipN));}catch(e){}return t;}   /* cycles rather than picking at random, and the cursor persists across sessions -- random repeats itself often enough that a player sees the same line twice before seeing half the pool */
 function tipHtml(t){return`<b>${t.a}</b><span>${t.t}</span>`;}
 let _rgTip={wave:-1,html:''};
-function regroupTipHtml(){if(_rgTip.wave!==rt.wave){_rgTip={wave:rt.wave,html:tipHtml(nextTip())};}return _rgTip.html;}   /* LATCHED PER REGROUP. The regroup banner is rewritten every frame, so calling nextTip() straight from the render would burn the whole pool in under a second and the text would strobe -- it advances once per wave. */
+function regroupTipHtml(){if(_rgTip.wave!==rt.wave){_rgTip={wave:rt.wave,html:setTip(nextTip())};}return _rgTip.html;}   /* LATCHED PER REGROUP. The regroup banner is rewritten every frame, so calling nextTip() straight from the render would burn the whole pool in under a second and the text would strobe -- it advances once per wave. */
 function currentGuide(){if(!S||S.over||tutorial.active)return null;if(!guideState.dismissed&&rt.phase==='turns'&&tb&&tbActiveInput()){
   if(tb.picking)return{key:'tb-sight',title:'SET SIGHT · FREE',text:`Tap ${tb.picking.cap} lane${tb.picking.cap===1?'':'s'} on the board, then confirm in the trooper panel. This does not spend an action.`};
   const left=tbBudgetLeft(),selected=S.sel!=null?units[S.sel]:null;if(!(tb.log||[]).length)return{key:'tb-first',title:`YOUR TURN · ${left===Infinity?'∞':left} ACTIONS`,text:'Tap a green hex to move, or tap an enemy showing a hit % to fire. Each move or shot costs 1; Set Sight is free.'};
@@ -3702,7 +3812,8 @@ function drawHomeShowcase(dt){
 function loop(ts=0){requestAnimationFrame(loop);if(ts-(rt._frameT||0)<FRAME_MS-1)return;   // frame-rate cap: bail (next rAF already queued) until the target interval elapses
   const dt=rt.last?Math.min(80,ts-rt.last):0;rt.last=ts;rt._frameT=ts;
   const onHome=document.body.dataset.screen==='home';
-  if(onHome)drawHomeShowcase(dt);   // ambient trooper exhibition behind the PLAY hex (only path that renders on the home screen)
+  if(onHome){drawHomeShowcase(dt);drawTipArt(dt);
+    _tipRot+=dt;if(_tipRot>=9000){_tipRot=0;const _ht=document.getElementById('homeTip');if(_ht)_ht.innerHTML=setTip(nextTip());}}   /* AUTO-ROTATE every 9s. Ian 2026-07-31: the pool only advanced on entering the home screen, so a session showed exactly ONE tip and it read as static furniture. Rides the existing loop -- no second requestAnimationFrame (see the one-rAF rule). */   // ambient trooper exhibition behind the PLAY hex (only path that renders on the home screen)
   if(onHome&&mp.active&&mp.isHost){mp.syncMs=(mp.syncMs||0)+dt;if(mp.syncMs>=250){mp.syncMs=0;mpSync();}}   /* the home screen skips updateSim entirely -- which is where the 11Hz broadcast lives. A host idling on home (now a normal hop via lobby ← → home) must keep a slower heartbeat going or every guest trips the 6s staleness alarm and starts panic-rejoining a perfectly healthy room. */
   if(!onHome){const _pp0=EXP.perfHud?performance.now():0;const _ffN=ffActive()?FF_RATE:1;for(let _s=0;_s<_ffN;_s++){updateSim(dt);tickShotClock(dt);}if(EXP.perfHud)_perfSim=_perfSim*.9+(performance.now()-_pp0)*.1;renderWaitState();   /* FAST-FORWARD sub-steps the sim instead of scaling dt: every per-tick gate (step commit, cooldown drain, reaction windows) still sees a normal frame delta, so behaviour is identical to real time just compressed. Scaling dt would blow past the min(80,..) clamp above and let units skip hexes. */
     let active=rt.running||(rt.countdownMs||0)>0||cascadeActive()||_camEasing||shotFx.length||warpFx.length||fx.length||hitFx.length||plateFx.length||coreKillFx.length||booms.length||_forceDraw;
