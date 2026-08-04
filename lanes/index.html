@@ -271,6 +271,11 @@
   .regroup-toast.show{display:flex}.regroup-toast-text{display:flex;flex-direction:column;gap:1px;text-align:left}
   .regroup-toast h2{margin:0;font-size:13px;white-space:nowrap;text-shadow:0 1px 6px #000}.regroup-toast p{margin:0;font-size:11px;color:#dbe6ff;text-shadow:0 1px 6px #000}
   .regroup-toast button{pointer-events:auto;flex-shrink:0}
+  #lobbyFeed{margin-top:12px;min-height:34px;display:flex;align-items:flex-start;gap:8px;font-size:11px;line-height:1.4;color:#9fb3d9;opacity:0;transition:opacity .5s ease;text-shadow:0 1px 5px rgba(0,0,0,.9)}
+  #lobbyFeed.show{opacity:1}
+  #lobbyFeed b{flex:0 0 auto;font:800 8.5px ui-sans-serif;letter-spacing:.11em;text-transform:uppercase;padding-top:1px}
+  #lobbyFeed.newf b{color:#8ef6b1}
+  #lobbyFeed.tipf b{color:#7de8f5}
   .tipline{margin:0;font-size:10.5px;line-height:1.35;color:#a9b8d6;display:flex;gap:7px;align-items:baseline;text-shadow:0 1px 6px #000}   /* rotating hint line -- deliberately quieter than the copy above it, one clear step down, never a second headline */
   .tipline b{flex-shrink:0;font-size:8.5px;font-weight:800;letter-spacing:.1em;color:#7de8f5}
   .tipline:empty{display:none}
@@ -562,6 +567,7 @@
       <button class="btn ghost" id="lobbyLeaveBtn">Leave room</button>
     </div>
     <div id="lobbyStatus"></div>
+    <div id="lobbyFeed" aria-live="off"></div><!-- rotating what's-new / tactics line: the lobby is dead time while you wait for a friend to join, so it is the one place a feature list can sit without being in the way -->
   </div>
 </div>
 
@@ -944,6 +950,7 @@ function saveMuted(){try{localStorage.setItem('hsl_muted',AUDIO_MUTED?'1':'0');}
 let PRO=false;try{PRO=localStorage.getItem('hsl_pro')==='1';}catch(e){}
 function isPro(){return true;}
 function setPro(v){PRO=!!v;try{localStorage.setItem('hsl_pro',v?'1':'0');}catch(e){}}
+const BUILD_ID='176';   /* ⚠ BUMP THIS EVERY SHIP, in the same edit as CURRENT_PROJECT_VERSION / CFBundleVersion. It is the ONLY thing that lets two players discover they are on different builds. Multiplayer is host-authoritative for the SIM, but every client still computes fog, exposure rays and all drawing LOCALLY from shared geometry code -- so any build that changes vision or rendering (e.g. 174's muzzle-centring, which moved targetExposureInfo's ray origin) makes a mismatched guest see a genuinely different board from the host. Reported 2026-08-03 by a player on an older app build: "my guys are flickering and I can't see your guys at all, it looks like bullets are coming from nowhere" -- three symptoms, one cause, and nothing in the game said a word about it. This is a WARNING, never a block: it names both builds and lets them play on, because refusing the connection over a UI-only difference would be worse than a cosmetic desync. */
 const DEV_IAP_STUB=false;   /* SHIP VALUE. RevenueCat is wired (see purchasePro/restorePro below), so real purchases route through the store. Leave FALSE for any App Store / TestFlight build -- true would hand out Pro for free on a non-native context or a failed RC init. Flip to true only for a throwaway local unlock test. */
 const DEV_TOOLS=false;   /* SHIP VALUE. Gates the in-app "Pro: ON/OFF" dev toggle in the experiments panel -- a free-unlock backdoor that must NOT ship. Set true locally to test the locked-vs-unlocked gating without a sandbox purchase. */
 const PRO_GATES={format:new Set(['3-ffa','4-ffa','5-ffa','6-ffa','4-2v2']),squad:new Set(['custom']),objective:new Set(['ctf','raid','redrover']),mode:new Set()};   /* FREE: 2-team Wreck, Zomboids, preset squads, turn-based, and MULTIPLAYER. PRO: 3/4/5/6 teams, custom squads, CTF/Raid/Red Rover. Zomboids graduated to the free package 2026-08-03 because it is both the first-play training and the complete solo survival mode; the same set governs setup and online host/join validation so free access cannot drift by surface. BOARD gate removed 2026-07-19 (one fixed field size). MODE gate emptied 2026-07-20 -- turn-based is free (Ian: "turn based should be ungated too"). MULTIPLAYER un-gated the same day: it is P2P with no server cost, and capping the free side shrinks the very pool that makes the mode work. */
@@ -3405,6 +3412,26 @@ function drawTipArt(dt){const c=document.getElementById('tipArt');if(!c||!_tipAr
   try{TIP_ART[_tipArtKind](g,W,H,_tipT);}catch(e){_tipArtKind=null;}   /* a diagram must never be able to take the home screen down -- drop it and carry on */
 }
 let _tipN=0;try{_tipN=parseInt(localStorage.getItem('hsl_tip')||'0',10)||0;}catch(e){}
+const WHATS_NEW=[
+  'Hold a trooper, drag to an action, let go — GUARD, SUPPRESS and HOLD now live on the board, not just the dock.',
+  'Snipers punch through armour: one round takes a whole ring plate off and carries into the shard beneath.',
+  'The shape sheet can set BOLTS PER PULL (×N) per class, and the 30/60/90 columns now show your second barrel.',
+  'A barrel blocked by a wall on its own side now centres, so aiming down a wall fires down the wall.',
+  'Turn-based resolve keeps the board exactly as it was — the magenta outline is the only thing that changes.',
+  'The HUD is text on the board now: no panels boxing the map in, and the dock only fills up when a trooper is selected.',
+];   /* WHAT'S NEW (Ian 2026-08-03: "when you add features or updates they should be hinted somewhere in the game ... while we wait for game setups, a list of the new features or old features that are helpful"). Newest first. Keep entries to ONE sentence in plain language -- this is read at a glance by someone waiting for a friend to join, not a changelog. Prune the tail when it grows past ~8; anything older has stopped being news. */
+let _feedN=0,_feedRot=0;
+function lobbyFeedTick(dt){const el=document.getElementById('lobbyFeed');if(!el)return;
+  if(document.body.dataset.screen!=='lobby'){el.classList.remove('show');_feedRot=0;return;}
+  _feedRot+=dt;
+  if(!el.classList.contains('show')||_feedRot>=7000){
+    if(_feedRot>=7000||!el.dataset.seeded){_feedRot=0;el.dataset.seeded='1';
+      /* alternate NEW / TIP so the feed teaches as well as announces, and neither pool runs dry while someone waits */
+      const showNew=(_feedN%2)===0,i=Math.floor(_feedN/2);
+      const txt=showNew?WHATS_NEW[i%WHATS_NEW.length]:(TIPS[i%TIPS.length]||{}).t;
+      _feedN=(_feedN+1)%(WHATS_NEW.length*2);
+      if(txt){el.className=showNew?'newf':'tipf';el.innerHTML=`<b>${showNew?'New':'Tip'}</b><span>${txt}</span>`;}}
+    el.classList.add('show');}}
 function nextTip(){const t=TIPS[((_tipN%TIPS.length)+TIPS.length)%TIPS.length];_tipN=(_tipN+1)%TIPS.length;try{localStorage.setItem('hsl_tip',String(_tipN));}catch(e){}return t;}   /* cycles rather than picking at random, and the cursor persists across sessions -- random repeats itself often enough that a player sees the same line twice before seeing half the pool */
 function tipHtml(t){return`<b>${t.a}</b><span>${t.t}</span>`;}
 let _rgTip={wave:-1,html:''};
@@ -3916,6 +3943,7 @@ function drawHomeShowcase(dt){
 function loop(ts=0){requestAnimationFrame(loop);if(ts-(rt._frameT||0)<FRAME_MS-1)return;   // frame-rate cap: bail (next rAF already queued) until the target interval elapses
   const dt=rt.last?Math.min(80,ts-rt.last):0;rt.last=ts;rt._frameT=ts;
   const onHome=document.body.dataset.screen==='home';
+  lobbyFeedTick(dt);   /* the lobby is the one screen that is pure waiting, so the what's-new / tactics line rotates there; cheap no-op on every other screen */
   if(onHome){drawHomeShowcase(dt);drawTipArt(dt);
     _tipRot+=dt;if(_tipRot>=9000){_tipRot=0;const _ht=document.getElementById('homeTip');if(_ht)_ht.innerHTML=setTip(nextTip());}}   /* AUTO-ROTATE every 9s. Ian 2026-07-31: the pool only advanced on entering the home screen, so a session showed exactly ONE tip and it read as static furniture. Rides the existing loop -- no second requestAnimationFrame (see the one-rAF rule). */   // ambient trooper exhibition behind the PLAY hex (only path that renders on the home screen)
   if(onHome&&mp.active&&mp.isHost){mp.syncMs=(mp.syncMs||0)+dt;if(mp.syncMs>=250){mp.syncMs=0;mpSync();}}   /* the home screen skips updateSim entirely -- which is where the 11Hz broadcast lives. A host idling on home (now a normal hop via lobby ← → home) must keep a slower heartbeat going or every guest trips the 6s staleness alarm and starts panic-rejoining a perfectly healthy room. */
@@ -4033,7 +4061,8 @@ function mpHostReceive(conn,msg){
     else if(action==='flip'&&units[unit]&&units[unit].team===msg.team)doFlip(unit);
     else if(action==='rghold'&&units[unit]&&units[unit].team===msg.team)doRegroupHold(unit);   /* re-validated against the host's own board like every other peer input -- ownership is checked here, never taken from the message */
     else if(action==='ready')markReady(msg.team);
-    else if(action==='callsign'&&typeof msg.cs==='string'&&CALLSIGNS.includes(msg.cs)){mp.names[msg.team]=msg.cs;renderScore();}   /* host-side whitelist check, chatReceive pattern -- an off-list string is dropped, never stored, never rebroadcast */
+    else if(action==='callsign'&&typeof msg.cs==='string'&&CALLSIGNS.includes(msg.cs)){mp.names[msg.team]=msg.cs;renderScore();
+      if(msg.bid&&msg.bid!==BUILD_ID){(mp._verWarned||(mp._verWarned=new Set()));if(!mp._verWarned.has(msg.team)){mp._verWarned.add(msg.team);mpVersionWarn(msg.bid,BUILD_ID,false);}}}   /* the GUEST is the one who sees a broken board, but only the HOST can tell them to update -- so surface it here too, once per seat so a reconnect loop cannot spam the log */   /* host-side whitelist check, chatReceive pattern -- an off-list string is dropped, never stored, never rebroadcast */
     else if(action==='tbready'&&tb&&tb.phase==='plan'&&isHumanTeam(msg.team)&&!tb.ready.has(msg.team)){if(Array.isArray(msg.plan))tb.plans[msg.team]=tbSanitizePlan(msg.plan,msg.team);tbSimReady(msg.team);}}   // the only turn command on the wire is a complete simultaneous plan, validated by the host
   else if(msg.t==='chat'){chatReceive(msg.team,msg.text);mpSendAll(msg,conn);}
   else if(msg.t==='ping'){}}   // ping = pure liveness; the receive time was already noted
@@ -4062,7 +4091,7 @@ function mpHostCode(code,rehost){const prevStage=mp.stage;mpLeave(true,rehost);m
   mp.peer.on('connection',conn=>{conn.on('open',()=>{const nowT=performance.now();for(const c of mp.conns.slice())if(!c.open||nowT-(c._lastRecv||nowT)>4000){try{c.close();}catch(e){}mpDrop(c);}   // a knock at the door reaps silent corpses first, so a rejoining player gets their old seat back instead of "room full"
       const team=mpNextTeam();if(team<0){conn.send({t:'full'});setTimeout(()=>conn.close(),300);return;}
       conn._team=team;conn._lastRecv=performance.now();mp.conns.push(conn);(mp.everHuman||(mp.everHuman=new Set())).add(team);S.ai[team]=false;settings.seats[team]=false;if(rt.phase==='setup')rt.ready.delete(team);
-      conn.send({t:'assign',team,snap:mpSnap()});renderScore();renderSeats();
+      conn.send({t:'assign',team,bid:BUILD_ID,snap:mpSnap()});renderScore();renderSeats();
       mpSetStatus(`${COLORS[team].n} joined — ${mp.conns.length} in the room.`);chatSys(`${COLORS[team].n} joined the room.`);});
     conn.on('data',msg=>{mpNoteRecv(conn);mpHostReceive(conn,msg);});
     conn.on('close',()=>mpDrop(conn));conn.on('error',()=>mpDrop(conn));});
@@ -4081,6 +4110,7 @@ function mpJoinCode(code,rejoin){if(!RTC_OK){openLobby();return;}const tries=rej
       mp.conns=[conn];mp.lastRecv=performance.now();mpSetStatus('Connected — waiting for your seat…');mpShowRoom(true);for(const c of cands)if(c!==conn&&c!==mp.conns[0])try{c.close();}catch(e){}});
     conn.on('data',msg=>{if(mp.conns[0]!==conn)return;mpNoteRecv(conn);
       if(msg.t==='assign'){const lk=mpContentLocked(msg.snap&&msg.snap.settings);if(lk){mpLeave();setScreen('home');openPaywall(lk.key);afterProChange('That room is running Pro content — free multiplayer includes 1v1 Wreck and Zomboids.');return;}   /* land the paywall over the HOME screen -- an invite-link first launch used to strand "Maybe later" on an empty lobby having never seen PLAY */   /* checked on ASSIGN, before mpApply adopts the host's settings. KNOWN GAP: a host who switches to Pro content mid-room is not re-checked -- kicking someone out of a live match was judged worse than the leak. */
+        if(msg.bid&&msg.bid!==BUILD_ID)mpVersionWarn(msg.bid,BUILD_ID,true);   /* named before anything else lands, so the first thing a mismatched guest reads is WHY the board is about to look wrong */
         mp.myTeam=msg.team;mp._rejoinTries=0;mp._rejoinT0=null;mp._reconActive=false;mpSaveRoom();mpApply(msg.snap);mpNameAnnounce();mpSetStatus(`Joined room <b>${code.toUpperCase()}</b> as <b style="color:${COLORS[msg.team].c}">${COLORS[msg.team].n}</b>.`);if(rejoin)chatSys('Reconnected.');else{closeSheet();mpFlashOk(`✓ Connected as ${COLORS[msg.team]?COLORS[msg.team].n:'player'}`);}setScreen(mp.stage==='lobby'?'lobby':'battle');}   /* land where the room actually is: lobby if the host hasn't started, straight into the battle if it's already live (mid-match joins and rejoins) */
       else if(msg.t==='state')mpApply(msg.snap);
       else if(msg.t==='chat')chatReceive(msg.team,msg.text);
@@ -4120,7 +4150,16 @@ function chatReceive(team,text){if(!QUICK_CHAT.includes(text))return;chatAppend(
 const CALLSIGNS=['VIPER','WOLF','HAWK','GHOST','FALCON','COBRA','LYNX','ORCA','TALON','NOVA','ONYX','SABLE'];   /* WHO'S WHO (Ian 2026-08-01: "I can't tell if my one friend is playing or the other") -- preset-only callsigns, same App Review UGC rule as chat: a fixed whitelist, validated on the host AND on every receiving client, so no tampered build can show free text to a real player. Picked in the lobby, shown at the seat's presence light everywhere. */
 let myCallsign='';try{const _mcs=localStorage.getItem('hsl_callsign');if(_mcs&&CALLSIGNS.includes(_mcs))myCallsign=_mcs;}catch(e){}
 function cycleCallsign(){myCallsign=CALLSIGNS[(CALLSIGNS.indexOf(myCallsign)+1)%CALLSIGNS.length];try{localStorage.setItem('hsl_callsign',myCallsign);}catch(e){}mpNameAnnounce();renderLobby();if(S)renderScore();}
-function mpNameAnnounce(){if(!mp.active||!myCallsign)return;if(mp.isHost)mp.names[mp.myTeam]=myCallsign;else mpSendInput({action:'callsign',cs:myCallsign});}   /* guests ASK; only the host writes the shared roster and only after its own whitelist check */
+function mpVersionWarn(theirs,mine,iAmGuest){
+  const older=(Number(mine)||0)<(Number(theirs)||0);
+  const who=iAmGuest?'The host':'A player who joined';
+  const msg=`Build mismatch — you are on ${mine}, ${iAmGuest?'the host is':'they are'} on ${theirs}. ${older?'Update in TestFlight (or reload the web page) to match.':`${who} should update.`} Until then the board can look wrong: units flickering, enemies invisible, shots seeming to come from nowhere.`;
+  chatSys(msg);   /* the chat log PERSISTS -- a 2.6s banner is exactly what someone mid-firefight misses, and this is the one message that explains everything else they are about to see */
+  const el=document.getElementById('mpBanner'),tx=document.getElementById('mpBannerTxt');
+  if(el&&tx){el.classList.remove('ok');el.classList.add('show');tx.textContent=`⚠ Build mismatch: you ${mine} · ${iAmGuest?'host':'them'} ${theirs}`;clearTimeout(mp._bannerT);mp._bannerT=setTimeout(()=>el.classList.remove('show'),9000);}
+  mpSetStatus(`⚠ Build mismatch — you ${mine}, ${iAmGuest?'host':'they'} ${theirs}.`);}
+   /* WHY WARN AND NOT BLOCK: most builds differ only in UI, and refusing to connect over that would be worse than the desync. Naming both numbers turns a baffling twenty minutes into a five-second fix. Fires on BOTH sides -- the guest sees the wrong board, but only the host can tell them to update. */
+function mpNameAnnounce(){if(!mp.active||!myCallsign)return;if(mp.isHost)mp.names[mp.myTeam]=myCallsign;else mpSendInput({action:'callsign',cs:myCallsign,bid:BUILD_ID});}   /* guests ASK; only the host writes the shared roster and only after its own whitelist check */
 const QUICK_CHAT=['GG','Nice shot!','Regroup','Need backup','On my way','Well played','Thanks!','Sorry!'];   /* room chat is preset-only (Ian, 2026-07-18: cut free-text before MP ships in v1) -- App Store Guideline 1.2 (UGC) wants a report/block/filter story for open chat between strangers; a fixed line list has no free text to moderate in the first place */
 function renderQuickChat(){const host=document.getElementById('mpChatQuick');if(!host)return;host.innerHTML='';QUICK_CHAT.forEach(text=>{const b=document.createElement('button');b.type='button';b.textContent=text;b.addEventListener('click',()=>sendQuickChat(text));host.appendChild(b);});}
 function sendQuickChat(text){if(!mp.active||!QUICK_CHAT.includes(text))return;const team=mp.myTeam;
