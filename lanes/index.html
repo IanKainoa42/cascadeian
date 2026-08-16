@@ -1028,7 +1028,7 @@ function saveMuted(){try{localStorage.setItem('hsl_muted',AUDIO_MUTED?'1':'0');}
 let PRO=false;try{PRO=localStorage.getItem('hsl_pro')==='1';}catch(e){}
 function isPro(){return true;}
 function setPro(v){PRO=!!v;try{localStorage.setItem('hsl_pro',v?'1':'0');}catch(e){}}
-const BUILD_ID='254';   /* ⚠ BUMP THIS EVERY SHIP, in the same edit as CURRENT_PROJECT_VERSION / CFBundleVersion. It is the ONLY thing that lets two players discover they are on different builds. Multiplayer is host-authoritative for the SIM, but every client still computes fog, exposure rays and all drawing LOCALLY from shared geometry code -- so any build that changes vision or rendering (e.g. 174's muzzle-centring, which moved targetExposureInfo's ray origin) makes a mismatched guest see a genuinely different board from the host. Reported 2026-08-03 by a player on an older app build: "my guys are flickering and I can't see your guys at all, it looks like bullets are coming from nowhere" -- three symptoms, one cause, and nothing in the game said a word about it. This is a WARNING, never a block: it names both builds and lets them play on, because refusing the connection over a UI-only difference would be worse than a cosmetic desync. */
+const BUILD_ID='255';   /* ⚠ BUMP THIS EVERY SHIP, in the same edit as CURRENT_PROJECT_VERSION / CFBundleVersion. It is the ONLY thing that lets two players discover they are on different builds. Multiplayer is host-authoritative for the SIM, but every client still computes fog, exposure rays and all drawing LOCALLY from shared geometry code -- so any build that changes vision or rendering (e.g. 174's muzzle-centring, which moved targetExposureInfo's ray origin) makes a mismatched guest see a genuinely different board from the host. Reported 2026-08-03 by a player on an older app build: "my guys are flickering and I can't see your guys at all, it looks like bullets are coming from nowhere" -- three symptoms, one cause, and nothing in the game said a word about it. This is a WARNING, never a block: it names both builds and lets them play on, because refusing the connection over a UI-only difference would be worse than a cosmetic desync. */
 const DEV_IAP_STUB=false;   /* SHIP VALUE. RevenueCat is wired (see purchasePro/restorePro below), so real purchases route through the store. Leave FALSE for any App Store / TestFlight build -- true would hand out Pro for free on a non-native context or a failed RC init. Flip to true only for a throwaway local unlock test. */
 const DEV_TOOLS=false;   /* SHIP VALUE. Gates the in-app "Pro: ON/OFF" dev toggle in the experiments panel -- a free-unlock backdoor that must NOT ship. Set true locally to test the locked-vs-unlocked gating without a sandbox purchase. */
 const DEV_SHAPE_SHEET_SHORTCUT=true;   /* SHIP PREP: set false before any App Store submission. The centered editor remains available through EXP.shapeSheet; this temporary battle shortcut is only for direct ports tuning. */
@@ -1791,6 +1791,86 @@ function setWall(h,wtype=0,hard=false,dmg=0){const c=cells[h];if(!c)return false
   if(S&&(rt.phase==='combat'||rt.phase==='turns'||rt.phase==='regroup')){const _o=unitAt(h);if(_o&&_o.alive){lastEvent=`A barrier can't close on ${COLORS[_o.team].n} ${WEAP[_o.type].label} — the hex is occupied.`;return false;}}   /* NEVER SEAL A WALL ONTO A LIVING TROOPER (Ian 2026-07-31: "I pushed a wall into somebody; they overlapped with it, got stuck, and then my person couldn't recognize them"). A unit sharing a hex with a wall is corrupt state with a nasty tail: coverageInfo/coverInfo both bail on `cells[targetHex].wall`, so the trapped trooper becomes permanently UNTARGETABLE -- exactly the "couldn't recognize them" symptom -- while walls also block movement, hence "got stuck". setWall had NO occupancy guard of its own and relied on all six callers remembering; tryPushWall and rebuildWalls do check, but that is a rule every future caller has to re-learn, and one miss corrupts the board irrecoverably. Guarding at the chokepoint makes the invariant structural. Gated to a LIVE match on purpose: board generation runs during 'setup' and legitimately paints walls while the previous match's units may still be in `units`, so the guard must stay inert there or it would silently thin the generated layout. */
   c.wall=true;c.wtype=0;c.hard=false;c.dmg=dmg||0;_bgDirty=true;_wallGen++;return true;}   // walls are uniform now: one color (wtype 0), never anchored -- every wall is movable & breakable. wtype/hard args kept for call-site compatibility but ignored.
 function clearWall(h){const c=cells[h];if(!c)return;c.wall=false;c.wtype=0;c.dmg=0;c.hard=false;_bgDirty=true;_wallGen++;}
+/* ===================== BREACH (Ian 2026-08-15) =====================
+   "everybody files into the same attack point or lines up on a wall ... instead of moving them forward, i kinda want them to explode or
+   swing open to widen the area for fire fights, then the team members waiting behind the breachers file into the room or space just
+   inside the recently breached room, the breachers peek their corner and cover their six."
+   THE KEY DESIGN PROPERTY, and the reason this needs no tap: the breach point is not chosen, it is DISCOVERED from where the squad is
+   already standing ("anytime two members are together and touching 2 walls adjacent"). That makes BREACH a one-press ring action with
+   nothing to aim at -- the same principle that fixed GUARD/SUPPRESS in b246, where Ian rejected arming a button and then tapping a target.
+   Every tap on this board is already spoken for (adjacent wall -> shoulder it, anything else -> aim), so a design that needed one would
+   have had to take a gesture away from something else. */
+let _brMemo=null,_brKey='';
+function breachOpenable(h){return h!=null&&h>=0&&!!cells[h]&&!!cells[h].wall&&!cells[h].hard&&!fallenRing(h);}   /* `hard` walls are the board's own structure and are never breachable -- same exemption rebuildWalls uses */
+function breachWallsBy(u){const out=[];if(!u||u.hex==null)return out;for(const k of adj[u.hex]||[])if(breachOpenable(k))out.push(k);return out;}
+function breachChain(seed,team){const seen=new Set(seed);let front=seed.slice();   /* "any members connected to them will be forced to participate" -- a shoulder-to-shoulder chain out from the two breachers, not a radius */
+  while(front.length){const nxt=[];
+    for(const i of front)for(let j=0;j<units.length;j++){const v=units[j];
+      if(seen.has(j)||!v||!v.alive||v.horde||v.dummy||v.team!==team)continue;
+      if(!(adj[units[i].hex]||[]).includes(v.hex))continue;
+      seen.add(j);nxt.push(j);}
+    front=nxt;}
+  return[...seen];}
+function breachClusters(team){const key=team+'|'+_wallGen+'|'+_occGen+'|'+(rt.shrink||0);
+  if(_brMemo&&_brKey===key)return _brMemo;   /* HARD state only (bodies, walls, ring) -- no eased value in the key, so this recomputes when the board changes and not once per frame. See the memo rules in CLAUDE.md. */
+  const out=[],usedBreacher=new Set(),mine=[];
+  for(let i=0;i<units.length;i++){const u=units[i];if(u&&u.alive&&!u.horde&&!u.dummy&&u.team===team)mine.push(i);}
+  for(const i of mine){if(usedBreacher.has(i))continue;
+    for(const j of mine){if(j===i||usedBreacher.has(j))continue;
+      if(!(adj[units[i].hex]||[]).includes(units[j].hex))continue;   /* shoulder to shoulder */
+      let pair=null;
+      for(const wa of breachWallsBy(units[i])){for(const wb of breachWallsBy(units[j])){
+        if(wa===wb||!(adj[wa]||[]).includes(wb))continue;pair=[wa,wb];break;}
+        if(pair)break;}
+      if(!pair)continue;
+      usedBreacher.add(i);usedBreacher.add(j);   /* only the BREACHERS are consumed, not the chain -- two disjoint pairs anywhere on the board give two breaches, which is exactly Ian's "two walls can be pushed open depending on how many teammates are left" with no counter to tune */
+      out.push({breachers:[i,j],walls:pair});
+      break;}}
+  _brKey=key;_brMemo=out;return out;}
+function breachClusterFor(ui){if(ui==null||ui<0||!units[ui]||!units[ui].alive)return null;
+  for(const c of breachClusters(units[ui].team))if(c.breachers.includes(ui))return c;
+  return null;}
+function breachInterior(walls,menHexes,limit){   /* "the space just inside" -- the far side of the opening, found by geometry rather than by any notion of rooms the board does not have */
+  if(!menHexes.length)return[];
+  const mx=menHexes.reduce((s,h)=>s+centers[h].x,0)/menHexes.length,my=menHexes.reduce((s,h)=>s+centers[h].y,0)/menHexes.length;
+  const wx=walls.reduce((s,h)=>s+centers[h].x,0)/walls.length,wy=walls.reduce((s,h)=>s+centers[h].y,0)/walls.length;
+  const gate=Math.hypot(wx-mx,wy-my),far=h=>Math.hypot(centers[h].x-mx,centers[h].y-my)>gate;
+  const seen=new Set(walls),out=[];let front=walls.slice();
+  for(let d=0;d<3&&out.length<limit;d++){const nxt=[];
+    for(const h of front){if(out.length>=limit)break;   /* the limit has to be checked on BOTH loops -- breaking only the inner one let a single ring overshoot (asked for 8, got 11) */
+      for(const k of adj[h]||[]){
+        if(seen.has(k))continue;seen.add(k);
+        if(!cells[k]||cells[k].wall||fallenRing(k))continue;
+        if(!far(k))continue;   /* never file BACKWARD past the squad -- without this the flood picks up the ground they are already standing on */
+        out.push(k);nxt.push(k);if(out.length>=limit)break;}}
+    front=nxt;}
+  return out;}
+function doBreach(ui){const cl=breachClusterFor(ui);if(!cl)return false;
+  const team=units[ui].team,men=breachChain(cl.breachers,team);
+  const opened=[];
+  for(const w of cl.walls)if(breachOpenable(w)){clearWall(w);opened.push(w);}
+  for(const k of adj[cl.walls[0]]||[])if((adj[cl.walls[1]]||[]).includes(k)&&breachOpenable(k)){clearWall(k);opened.push(k);}   /* WIDEN: a wall hex touching BOTH breached hexes is the pillar between them. Taking it turns two doorways into one opening you can actually fight through, which is the "widen the area for fire fights" ask -- it is bounded to that shared neighbour, so a breach can never cascade across a whole wall line. */
+  if(!opened.length)return false;
+  for(const h of opened){boom(h);fx.push({hex:h,t:gnow(),col:'#ffd66a',big:true});}   /* swings open rather than shoving: the wall is gone, not relocated -- deliberately NOT tryPushWall, which moves a barrier one hex and would just put it back in the way */
+  refreshReach();occTouch();
+  const interior=breachInterior(opened,cl.breachers.map(i=>units[i].hex),8);
+  /* BREACHERS HOLD THE FLANKS AND PIE THEIR CORNERS. They do not go in first -- Ian: "the breachers peek their corner and cover their six".
+     Each takes the interior hex furthest from the other's side, so the two arcs cross the opening from opposite flanks instead of both
+     staring down the middle. */
+  cl.breachers.forEach((bi,n)=>{const b=units[bi];if(!b||!b.alive)return;
+    b.order=[];b.userOrder=false;b.state='hold';b.rgHold=true;
+    if(interior.length){const pick=interior[n===0?0:interior.length-1];setFocusHex(bi,pick,'user');}
+    b.breachHoldT=gnow();});
+  /* THE STACK FILES IN and keeps pushing (Ian chose "pour through and keep pushing" over a second signal). */
+  const followers=men.filter(i=>!cl.breachers.includes(i)&&units[i]&&units[i].alive);
+  let slot=0;
+  for(const fi of followers){const dest=interior[Math.min(slot,interior.length-1)];slot++;
+    if(dest==null)break;
+    const p=shortestSubPath(units[fi].hex,dest,10,fi);
+    if(p&&p.length>1)setMoveOrder(fi,p,false);}   /* user=false: this is a squad order, not a hand-drawn route, so it does not fight the player's own move intent bookkeeping */
+  lastEvent=`Breach! ${COLORS[team].n} blows the wall — ${followers.length} file in, ${cl.breachers.length} hold the corners.`;
+  renderStatus();return true;}
+function orderBreach(ui){if(mp.active&&!mp.isHost){mpSendInput({action:'breach',unit:ui});return;}doBreach(ui);}   /* one writer of shared state: a joiner asks, the host re-validates the cluster and applies it */
 function hardWallCount(){return cells.reduce((n,c)=>n+(c.wall&&c.hard?1:0),0);}
 /* REBUILD THE BARRICADES (Ian 2026-07-19). Zomboids never cascades, so wall damage was permanent: the horde and your own stray
    rounds ground the cover down wave after wave until you were fighting in an open field, and the regroup line has been promising
@@ -2245,6 +2325,7 @@ function lockCurrentAim(ui){const u=units[ui];if(!u||!u.alive)return;orderFocus(
 function ringActionsFor(ui){const u=units[ui];if(!u||!u.alive||!isMyTeam(u.team))return[];const out=[];
   if(tbOn())return out;   /* SHOULDER FLIP IS NOT IN THE RING (Ian 2026-08-03: "remove right and left because I don't really need that"). It was turn-based's only per-trooper action, so TB simply has no ring -- ringOpen bails on an empty list and the long-press falls through to normal behaviour. Flip is still reachable: the dock button, and the double-tap-a-selected-trooper gesture it has always owned. */
   const sCool=Math.ceil((u.supCoolMs||0)/1000);
+  if(breachClusterFor(ui))out.push({k:'breach',lbl:'BREACH',on:false,col:'255,214,106',run:()=>orderBreach(ui)});   /* APPEARS ONLY WHEN THE SQUAD IS ALREADY IN POSITION. The wedge is absent otherwise rather than greyed, because the ring is a fast thumb gesture and a disabled slot there just steals travel from the live ones. No target to pick -- see the BREACH block near clearWall. */
   out.push({k:'guard',lbl:'GUARD',on:u.focusSource==='user',col:'255,213,106',run:()=>lockCurrentAim(ui)});
   out.push({k:'sup',lbl:u.suppressing?'ON':(sCool>0?'⟳'+sCool+'s':'SUPPRESS'),on:u.suppressing,col:u.suppressing?'255,122,90':(sCool>0?'120,124,140':'255,122,90'),run:()=>{if(u.suppressing){endSuppress(u);return;}if((u.supCoolMs||0)>0)return;lockCurrentAim(ui);u.suppressing=true;u.supActiveMs=0;}});
   /* SPIN REMOVED 2026-08-08 (Ian: "the spin command does nothing" -- correct, it was a no-op button). It set ring.va and hingeArmor has been in EXP_BAKED since b156: updateRing's hinged branch assigns r.va=0 and RETURNS before any spin physics, so the kick was erased on the very next frame. There is no bearing to spin when the plates are bolted to the body. The fast body-spin melee Ian wants is a NEW mechanic, not this one revived, and it needs its numbers dialled rather than guessed -- see progress.md. NOTE: the same flag flip also made `isSpinning` in the impact resolver permanently false, so the spinning-plate DEFLECT went unreachable at the same time. */
@@ -3848,7 +3929,7 @@ function renderDock(){const host=document.getElementById('dock');if(!host)return
   const mine=[];units.forEach((u,i)=>{if(u.alive&&isMyTeam(u.team))mine.push(i);});
   const show=S&&!S.over&&mine.length>0;host.classList.toggle('show',!!show);
   if(!show){host.innerHTML='';_dockSig='';return;}
-  const sig=mine.join(',')+'|'+S.sel+'|'+(S.selGroup||[]).join(',')+'|'+(settings.dockSide||'right')+'|'+(isLandscapeLayout()?'L':'P')+'|'+(tb?tb.seat+':'+tb.round+':'+tb.phase+':'+units.map(u=>(u.tbAp||0)+''+(u.tbActivated?1:0)+(tbHasPlan(u)?'p':'')).join(''):'rt'+units.map(u=>(u.suppressing?'S':(u.supCoolMs>0?'c'+Math.ceil(u.supCoolMs/1000):''))+(u.rgHold?'H':'')+((u.rallyMs||0)>0?'R':'')+(u.focusSource==='user'?'G':'')).join(''));   /* the per-trooper HOLD state rides the signature too -- the dock only rebuilds when this string changes, so a state left out of it never repaints. focusSource rides along so the GUARD button's glow updates the instant it locks -- it's a one-tap command now (lockCurrentAim), not an armed-then-tapped state, so nothing else in this signature would otherwise catch the change. */
+  const sig=mine.join(',')+'|'+S.sel+'|'+(S.selGroup||[]).join(',')+'|'+(settings.dockSide||'right')+'|'+(isLandscapeLayout()?'L':'P')+'|'+(tb?tb.seat+':'+tb.round+':'+tb.phase+':'+units.map(u=>(u.tbAp||0)+''+(u.tbActivated?1:0)+(tbHasPlan(u)?'p':'')).join(''):'rt'+units.map(u=>(u.suppressing?'S':(u.supCoolMs>0?'c'+Math.ceil(u.supCoolMs/1000):''))+(u.rgHold?'H':'')+(breachClusterFor(units.indexOf(u))?'B':'')+((u.rallyMs||0)>0?'R':'')+(u.focusSource==='user'?'G':'')).join(''));   /* the per-trooper HOLD state rides the signature too -- the dock only rebuilds when this string changes, so a state left out of it never repaints. focusSource rides along so the GUARD button's glow updates the instant it locks -- it's a one-tap command now (lockCurrentAim), not an armed-then-tapped state, so nothing else in this signature would otherwise catch the change. */
   if(sig!==_dockSig){_dockSig=sig;host.innerHTML='';
     for(const i of mine){if(i!==S.sel)continue;   /* ONE CARD, THE SELECTED ONE (Ian: "we don't need the trooper cards -- just showing who's selected would be nice, I normally use the buttons"). The roster used to render a chip per living trooper, which is what pushed the dock past the viewport in the first place; selection happens on the board or via NEXT, so the chips were paying rent for a tap he doesn't make. */
       const u=units[i],col=COLORS[u.team].c,sel=true,isMulti=(S.selGroup&&S.selGroup.includes(i)),chip=document.createElement('div');
@@ -3869,6 +3950,7 @@ function renderDock(){const host=document.getElementById('dock');if(!host)return
             const _spPlanned=(u.tbPlan&&u.tbPlan.acts||[]).some(a=>a.t==='spin'),_pCool=Math.ceil((u.spinCoolMs||0)/1000),_spOk=!_spPlanned&&_pCool<=0&&tbUnitCanAct(u)&&tbBudgetLeft()>0&&!(u.tbPlan&&u.tbPlan.acts||[]).some(a=>a.t==='move');
             const pb=document.createElement('button');pb.type='button';pb.className='dact';pb.textContent=_spPlanned?'◎ SPINNING':(_pCool>0?'◎ ⟳'+_pCool+'s':'◎ SPIN');pb.title='Spend 1 action: whirl on the spot — bites everything in the one-hex perimeter and deflects rounds while it runs, but no marching';pb.style.cssText=`margin-left:6px;padding:5px 8px;border-radius:8px;border:1px solid rgba(${_spPlanned?'94,224,240,.7':'255,255,255,.18'});background:rgba(${_spPlanned?'94,224,240,.16':'255,255,255,.06'});color:${_spPlanned?'#5ee0f0':(_spOk?'#cfe0ff':'#77809a')};font:700 10px ui-sans-serif;letter-spacing:.3px;cursor:pointer;flex:none`;
             pb.addEventListener('click',ev=>{ev.stopPropagation();if(_spPlanned||!_spOk){if(_pCool>0){lastEvent=`Spin is recharging (${_pCool}s).`;renderStatus();}return;}tbOrderSpin(i);});chip.appendChild(pb);}}   /* TB SPIN BUTTON -- the dock is the only place it can live: turn-based has no radial ring (ringActionsFor bails on tbOn()), which is exactly why "there is no spinning" was true. Cyan is the spin's own color everywhere else in the game, and the same greyed-while-unbuyable rule as suppress applies. */   /* TB SUPPRESS BUTTON (Ian 2026-08-06: "there's no option to choose suppress ... in the buttons bar") -- orange is the firing color, same as the RT dock's suppress; greyed while it cannot be bought (recharging, out of actions, or this trooper already marching) */else if(isMyTeam(u.team)&&!S.over){const mkb=(txt,armed,c,fn)=>{const b=document.createElement('button');b.type='button';b.className='dact';b.textContent=txt;b.style.cssText='margin-left:6px;padding:5px 8px;border-radius:8px;border:1px solid rgba('+c+(armed?',.9':',.4')+');background:rgba('+c+(armed?',.28':',.12')+');color:rgb('+c+');font:700 10px ui-sans-serif;letter-spacing:.3px;cursor:pointer;flex:none';b.addEventListener('click',ev=>{ev.stopPropagation();fn();renderStatus();});chip.appendChild(b);};
+        if(breachClusterFor(i))mkb('⊘ BREACH',false,'255,214,106',()=>orderBreach(i));   /* SITUATIONAL: present only while this trooper is actually half of a breach pair, so the dock never shows a button that would do nothing. Its availability MUST also be in the dock signature below, or the dock would not re-render when the squad walks into position -- exactly the trap b246 hit when GUARD's highlight started depending on focusSource. */
         mkb('⊙ GUARD',u.focusSource==='user','255,213,106',()=>lockCurrentAim(i));
         const sCool=Math.ceil((u.supCoolMs||0)/1000),sTxt=u.suppressing?'▶ ON':(sCool>0?'▶ ⟳'+sCool+'s':'▶ SUPPRESS'),sCol=u.suppressing?'255,122,90':(sCool>0?'120,124,140':'255,122,90');
         mkb(sTxt,u.suppressing,sCol,()=>{if(u.suppressing){endSuppress(u);return;}if((u.supCoolMs||0)>0)return;lockCurrentAim(i);u.suppressing=true;u.supActiveMs=0;});
@@ -4298,6 +4380,20 @@ function drawOrderAndFocus(u,sel){const c=unitRenderPos(u);
       if(_cut){const _fl=Math.hypot(f.x-ox,f.y-oy)||1,_fr=Math.max(_cut.frac,Math.min(1,HEXR*.95/_fl));f={x:ox+(f.x-ox)*_fr,y:oy+(f.y-oy)*_fr};}}   /* A CLIPPED BEAM STILL HAS TO BE VISIBLE. lineWallCut's floor is 0.08 of the whole flight, which is right for a bullet (it dies at once) and useless for a drawn line -- against a wall the trooper is standing against, the laser collapsed into the muzzle and read as no laser at all. Floor the DRAWN length at ~one hex radius (never past the uncut endpoint) so a genuinely blocked bearing reads as a stub ending on the wall face rather than as the sight line switching off. */   /* THE LASER STOPS AT THE WALL (Ian 2026-08-08: "the laser should never touch a wall ... I don't want to be braced on the wall and shooting the wall at the same time"). Rounds have stopped at the first wall on their flight line for a while -- lineWallCut, the exact call fireAt/lineFireAt already make -- but the drawn sight line ignored it and was painted straight THROUGH the barricade you were tucked behind, which reads as firing into your own cover. Same function, same muzzle-port origin, so the beam now ends exactly where a round from that port would. Combined with the port itself sliding around a blocked facet, a braced trooper's laser leaves past the corner instead of drawing into the wall; when the port is at the end of its travel and the line is still blocked, the beam correctly ends short at the wall face rather than lying about a shot it cannot take. */
     ctx.save();ctx.strokeStyle='rgba(255,45,45,.9)';ctx.lineWidth=.8;ctx.lineCap='round';ctx.shadowColor='rgba(255,40,40,.8)';ctx.shadowBlur=5;ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(f.x,f.y);ctx.stroke();
     ctx.fillStyle='rgba(255,70,60,.95)';ctx.beginPath();ctx.arc(f.x,f.y,1.8,0,7);ctx.fill();ctx.restore();}}
+function drawBreachCue(){if(!S||S.over||rt.phase!=='combat'||tbOn())return;   /* combat only, and never in turn-based -- the ring that triggers this is real-time only, so a cue anywhere else would advertise an action you cannot take */
+  const puls=.6+.4*Math.abs(Math.sin(gnow()/(760*PACE)));   /* one slow breath, not a flicker: the board language bans fast per-frame oscillation, which reads as strobing */
+  ctx.save();ctx.lineJoin='round';
+  for(let t=0;t<(S.players||0);t++){if(!isMyTeam(t))continue;   /* your own opportunities only -- an enemy stack lining up on a wall is not something you are handed for free */
+    for(const c of breachClusters(t)){const col=COLORS[t].c;
+      ctx.setLineDash([]);ctx.lineWidth=2.4;ctx.strokeStyle=hexA(col,.30+.42*puls);   /* SOLID, not dashed: a quiet DASHED cell ring already means spawn protection (b234), and reusing it here would give one motif two meanings. Solid double-outline reads as "this is coming down" rather than "this body is protected". */
+      for(const w of c.walls){const p=centers[w];if(!p)continue;
+        hexPath(p.x,p.y,HEXR-6);ctx.stroke();
+        ctx.globalAlpha=.45;hexPath(p.x,p.y,HEXR-11);ctx.stroke();ctx.globalAlpha=1;}   /* the inner ring is the second tier -- intensity by TIER, never by adding more light */
+      ctx.lineWidth=1.5;ctx.strokeStyle=hexA(col,.24+.30*puls);
+      for(const bi of c.breachers){const u=units[bi];if(!u||!u.alive)continue;const p=unitRenderPos(u);if(!p)continue;
+        ctx.beginPath();ctx.arc(p.x,p.y,HEXR*.62,0,Math.PI*2);ctx.stroke();}   /* and ring the two troopers who would do it, so the pairing is readable at a glance */
+    }}
+  ctx.restore();}
 function drawDeploymentZones(){if(!S||rt.phase!=='setup'||!deploymentZones.length)return;const pulse=.7+.3*Math.abs(Math.sin(gnow()/(520*PACE)));for(const z of deploymentZones){const col=COLORS[z.team].c,owned=isMyTeam(z.team),ready=S.ai[z.team]||rt.ready.has(z.team),zoneSet=new Set(z.cells);ctx.save();for(const h of z.cells){const c=centers[h];if(!c)continue;hexPath(c.x,c.y,HEXR-4);ctx.fillStyle=hexA(col,owned?.15:.08);ctx.fill();}
     ctx.strokeStyle=hexA(col,(owned?.88:.55)*pulse);ctx.lineWidth=owned?4:2.6;ctx.shadowColor=hexA(col,.9);ctx.shadowBlur=owned?16:9;for(const h of z.cells){const c=centers[h];if(!c)continue;for(let d=0;d<6;d++){const n=hexShift(h,d);if(n>=0&&zoneSet.has(n))continue;const a0=(-60*d)*Math.PI/180,a1=(60-60*d)*Math.PI/180;   /* direction d's screen edge-midpoint angle is 30-60d (see DIRS/aimDirFromVector), not 60d -- the old formula predates the flat-top board rotation and drew every boundary segment at the wrong vertex pair, scrambling the "surrounding" outline against the correctly-placed hex fills underneath */ctx.beginPath();ctx.moveTo(c.x+(HEXR-2)*Math.cos(a0),c.y+(HEXR-2)*Math.sin(a0));ctx.lineTo(c.x+(HEXR-2)*Math.cos(a1),c.y+(HEXR-2)*Math.sin(a1));ctx.stroke();}}
     const cc=centers[z.center];if(cc){ctx.shadowBlur=8;ctx.fillStyle=ready?'#8ef6b1':col;ctx.textAlign='center';ctx.textBaseline='middle';ctx.font=`900 ${Math.max(9,HEXR*.27)}px ui-sans-serif,system-ui`;ctx.fillText(`${COLORS[z.team].n.toUpperCase()} · ${ready?(S.ai[z.team]?'AUTO':'READY ✓'):'DEPLOY'}`,cc.x,cc.y);}ctx.restore();}}
@@ -4389,6 +4485,7 @@ function drawWorld(){const vis=visibleHexSet();_lastVis=vis;_selLaneSet=new Set(
   }
   drawTutorialLanes();
   drawPotentialRange();
+  drawBreachCue();
   drawDeploymentZones();   // render last among board overlays so the single team-colored perimeter remains legible over the green legal-move fill
   if(S){for(let i=0;i<units.length;i++){const u=units[i];if(u.alive&&isMyTeam(u.team)){const sc=centers[u.hex],pf=u.facing;if(i!==S.sel)drawLane(u,pf,false,false);}}if(S.sel!=null&&units[S.sel]&&units[S.sel].alive){const su=units[S.sel],sc=centers[su.hex],pf=pivotPoint?dirFromVector(pivotPoint.x-sc.x,pivotPoint.y-sc.y):su.facing;drawLane(su,pf,!!pivotPoint,true);drawSideStats(su);}}
   for(const item of viewerOverlapHexes(vis)){const c=centers[item.hex],col=COLORS[item.team!=null?item.team:S.current].c,ov=item.count-2;ctx.save();ctx.lineJoin='round';const a=Math.min(.72,.34+ov*.18);ctx.strokeStyle=hexA(col,a);ctx.lineWidth=1.5+ov*.55;const tri=(idx,r)=>{ctx.beginPath();for(let n=0;n<3;n++){const k=idx[n],px=c.x+HEX_COS[k]*r,py=c.y+HEX_SIN[k]*r;n?ctx.lineTo(px,py):ctx.moveTo(px,py);}ctx.closePath();ctx.stroke();};const rings=Math.min(3,1+ov);for(let ri=0;ri<rings;ri++){const rr=HEXR*(.72-ri*.15);tri([0,2,4],rr);}ctx.restore();}/* overlapping allied crossfire "kill zone" -- drawn in the contributing TEAM'S color. NO hex fill / no glow (Ian 2026-07-18: "too bright and full" -> "like these" pointing at the enemy-coverage triangles = "glass toy shapes"). ONE orientation only (up-tri, corners 0/2/4) -- NOT an up+down hexagram, that read as a Star of David ("too yiddish"). Intensity TIERS via CONCENTRIC nested triangles same as the coverage-marker doubles Ian liked: 2 lookers = 1 glass triangle, 3 = 2 nested, 4+ = 3 nested, plus an alpha + line-weight ramp, so a heavier crossfire visibly outranks a light one. Sparse mark, never a lit tile. */
@@ -4726,6 +4823,7 @@ function mpHostReceive(conn,msg){
     else if(action==='move'&&units[unit]&&units[unit].team===msg.team&&Array.isArray(path))setMoveOrder(unit,path,true);
     else if(action==='focus'&&units[unit]&&units[unit].team===msg.team&&hex>=0)setFocusHex(unit,hex,'user',(typeof msg.dir==='number'?msg.dir:null));   /* joiners send their tapped 12-step dir too, so their aim doesn't re-quantize host-side */
     else if(action==='push'&&units[unit]&&units[unit].team===msg.team&&hex>=0)tryPushWall(unit,hex);
+    else if(action==='breach'&&units[unit]&&units[unit].team===msg.team)doBreach(unit);   /* re-validated host-side: doBreach recomputes the cluster from live positions, so a stale or forged request simply finds none */
     else if(action==='spin'&&units[unit]&&units[unit].team===msg.team)doSpin(unit);
     else if(action==='flip'&&units[unit]&&units[unit].team===msg.team)doFlip(unit);
     else if(action==='rghold'&&units[unit]&&units[unit].team===msg.team)doRegroupHold(unit);
