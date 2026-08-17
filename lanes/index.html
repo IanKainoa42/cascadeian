@@ -935,7 +935,20 @@ function maxSquadSize(players){if(settings.format==='6-2v2v2')return 2;   /* 2v2
 function squadCapLocked(v){return (SQUAD_SIZE[v]||0)>maxSquadSize(settings.players);}
 function squadWithinCap(players){const order=['custom','breach','allRifle','allSniper','fireteam','quad','trio','duo'],cap=maxSquadSize(players);return order.find(s=>SQUAD_SIZE[s]<=cap)||'duo';}
 function squadSlots(){const base=settings.squad==='custom'?settings.customSquad.map((t,i)=>({type:WEAP[t]?t:'rifle',...CUSTOM_SLOT_POS[i]})):(SQUAD_PRESETS[settings.squad]||SQUAD_PRESETS.fireteam);
-  return base;}   // fallback is Fireteam now that Standard is gone
+  return base;}
+/* PER-TEAM LOADOUTS — DEV ONLY (Ian 2026-08-17: "a dev sheet that lets me choose, for each team, which
+   troopers belong to which group ... that way I can balance the teams"). Every team has always shared one
+   squad, so an asymmetric matchup was unaskable. DEV_SQUADS[team] is an array of class keys; absent means
+   that team uses the normal settings.squad, so with the sheet untouched nothing anywhere behaves
+   differently. Indexed by TEAM, never by position in deployTeams -- those two diverge the moment Zomboids
+   skips a seat, and that mismatch is the same shape as the CTF-flag-walled-in bug. */
+let DEV_SQUADS={};
+try{const _dq=JSON.parse(localStorage.getItem('hsl_devsquads')||'{}');if(_dq&&typeof _dq==='object')DEV_SQUADS=_dq;}catch(e){}
+function saveDevSquads(){try{localStorage.setItem('hsl_devsquads',JSON.stringify(DEV_SQUADS));}catch(e){}}
+function devSquadsActive(){return Object.keys(DEV_SQUADS).some(k=>Array.isArray(DEV_SQUADS[k])&&DEV_SQUADS[k].length);}
+function squadSlotsFor(t){const ov=DEV_SQUADS&&DEV_SQUADS[t];
+  if(!Array.isArray(ov)||!ov.length)return squadSlots();
+  return ov.slice(0,6).map((ty,i)=>({type:WEAP[ty]?ty:'rifle',...CUSTOM_SLOT_POS[i]}));}   // fallback is Fireteam now that Standard is gone
 const CONTROL_GROUPS=[
   {key:'format',label:'Teams',options:[['1v1','2'],['4-2v2','2v2'],['6-2v2v2','2v2v2'],['3-ffa','3'],['4-ffa','4'],['5-ffa','5'],['6-ffa','6']]},   // shown as team-count 2/3/4/5/6 (6 re-added 2026-07-19 -- one squad per hex corner). '4-2v2' = four squads in TWO alliances (0,0,1,1) -- a teamed match, allies spawn same-side / enemies opposite (twoVTwoSlots)
   {key:'squad',label:'Squad',options:[['duo','Duo'],['trio','Trio'],['quad','Quad'],['fireteam','Fireteam'],['breach','Breach'],['allRifle','All Rifle'],['allSniper','All Sniper'],['custom','Custom']]},
@@ -992,7 +1005,7 @@ window.addEventListener('orientationchange', ()=>setTimeout(adaptCanvasResolutio
 const TB_TEMPO=1800,MOVERANGE=3,FIRE_MS=1700*PACE,THINK_MS=1800*PACE,VISION_RADIUS=2,AIM_STEPS=12,SHOT_TRACE_MS=2300*PACE,WAVE_MS=60000,REGROUP_MS=15000,MOVING_CONE_MUL=.82,TRAVEL_BASE_MS=110*PACE,TRAVEL_FAST_MS=95*PACE,TRAVEL_PER_HEX_MS=340*PACE,AUTO_ENGAGE_R=3,SPOT_BASE_MS=520*PACE,SPOT_ANGLE_MS=1500*PACE,AIM_SETTLE_MS=280*PACE,SHRINK_WARN_MS=15000,SHRINK_MIN_R=3,WALL_HP=90,COMMAND_DRAG_THRESHOLD=22,FACE_TURN_RATE=Math.PI/640/PACE,REACT_DELAY_MS=350*PACE,HIT_FLINCH_MS=110*PACE,EYE_TURN_MS=500*PACE;   /* REACT_DELAY_MS stays 350 -- it also drives the SEPARATE humanlike spot-acquire beat (tryNotice, line ~2503, tuned against TUNE.targetDelayMul), which Ian did not ask to change. HIT_FLINCH_MS is the split-out constant for the "can't fire back for a beat after being hit" delay, dampened 2026-08-14 (Ian: "the flinch when shot needs to be dampened; it shouldn't be that effective"). */
 const RAID_RESPAWN_S=25,CTF_TARGET=6,RR_TARGET=6,RR_ROUND_S=100,REGROUP_BAND=4,RALLY_BAND=2,TB_ACTIONS=3,TB_TURN_MS=20000;   /* graduated game rules (2026-08-02): permanent values, no longer device-tunable */
 const HUD_DEAD_PX=12;   /* dead ring around interactive HUD chrome (2026-08-06): a bare tap this close to a live button is almost always a fat-fingered miss, and it used to fall through to the board as a re-aim/move/push order -- "a missed tap reads as broken". Same family as COMMAND_DRAG_THRESHOLD, not a TUNE dial. */
-let settings={branch:'lanes',format:'1v1',squad:'trio',objective:'tdm',players:2,board:DEFAULT_BOARD,tempo:DEFAULT_TEMPO,walls:'plenty',explosions:'off',autoEvade:'off',mode:'teleport',moveReach:'3',difficulty:'regular',seats:[false,true,true,true,true,true],customSquad:['sniper','rifle','rifle','shield','burst','shotgun'],dockSide:'right',rrFire:'on',rrHp:'normal',rrEngage:'hold',teamFollow:'follow'};   /* autoReady left the per-match wizard 2026-08-06 (Ian: "take auto-ready off and out of the game permanently, and make it a user setting") -- it lives in USET now, default OFF */
+let settings={branch:'lanes',format:'1v1',squad:'trio',objective:'tdm',players:2,board:DEFAULT_BOARD,tempo:DEFAULT_TEMPO,walls:'plenty',explosions:'off',autoEvade:'off',mode:'teleport',moveReach:'3',difficulty:'regular',seats:[false,true,true,true,true,true],customSquad:['sniper','rifle','rifle','shield','burst','shotgun'],myColor:0,dockSide:'right',rrFire:'on',rrHp:'normal',rrEngage:'hold',teamFollow:'follow'};   /* autoReady left the per-match wizard 2026-08-06 (Ian: "take auto-ready off and out of the game permanently, and make it a user setting") -- it lives in USET now, default OFF */
 /* ===== USER SETTINGS (the ship-ready Settings panel) — device-persistent, apply to every battle; distinct from per-match `settings` (the wizard) and from TUNE (feel dials). Add future user-level options HERE, not to the wizard. ===== */
 const USET_DEFAULTS={autoReady:false,ordersSec:Math.round(TB_TURN_MS/1000)};
 let USET={...USET_DEFAULTS};try{const _us=JSON.parse(localStorage.getItem('hsl_usettings_v1')||'{}');for(const k in USET_DEFAULTS)if(_us[k]!==undefined)USET[k]=_us[k];}catch(e){}
@@ -1004,7 +1017,21 @@ function aiSkillOf(team){return (S&&S.ai&&S.ai[team])?aiSkill():null;}   /* null
 try{const _ds=localStorage.getItem('hsl_dockSide');if(_ds==='left'||_ds==='right')settings.dockSide=_ds;}catch(e){}
 try{const _df=localStorage.getItem('hsl_diff');if(_df&&AI_SKILL[_df])settings.difficulty=_df;}catch(e){}   /* AI skill sticks across launches -- same precedent as dockSide/customSquad. Validated against AI_SKILL so a stale or hand-edited key can't leave settings.difficulty pointing at nothing (aiSkill() would fall back to regular anyway, but the setup sheet would show no active button). */
 function saveDifficulty(){try{localStorage.setItem('hsl_diff',settings.difficulty);}catch(e){}}
+/* YOUR COLOUR IN LOCAL PLAY (Ian 2026-08-17: "there's no way of deciding ... what color you are. Not on
+   local play anyway"). The per-match colour shuffle was reverted 2026-08-08 because randomising corner AND
+   colour together left nothing to anchor on, and that revert's comment says a CHOSEN colour is where the
+   follow-up lands -- this is it. Stored as a PALETTE index, applied by swapping it onto seat 0.
+   Multiplayer is untouched: there the host's `pal` rides the snapshot and both sides must paint the same
+   seats, so applyMyColor() refuses to run whenever mp.active. */
+function saveMyColor(){try{localStorage.setItem('hsl_mycolor',String(settings.myColor));}catch(e){}}
+function applyMyColor(){if(mp.active)return;const want=settings.myColor|0;
+  if(!(want>=0&&want<PALETTE.length)||_pal[0]===want)return;
+  const p=_pal.slice(),cur=p.indexOf(want);if(cur<0)return;p[cur]=p[0];p[0]=want;applyPalette(p);}   /* a plain swap, so the seat that held your colour takes the one you gave up and the array stays a permutation (applyPalette rejects anything else). Local only, so unlike setSeatColor it may take a colour off a live seat -- nobody else is watching. */
+function setMyColor(idx){settings.myColor=idx|0;saveMyColor();applyMyColor();
+  if(typeof renderWizard==='function')renderWizard();if(typeof renderSeats==='function')renderSeats();
+  if(typeof draw==='function')draw();}
 function setDockSide(s){settings.dockSide=s;try{localStorage.setItem('hsl_dockSide',s);}catch(e){}adaptCanvasResolution();if(typeof renderTrooperDock==='function')renderTrooperDock();if(typeof draw==='function')draw();}
+try{const _mc=parseInt(localStorage.getItem('hsl_mycolor'),10);if(_mc>=0&&_mc<PALETTE.length)settings.myColor=_mc;}catch(e){}
 try{const _cs=JSON.parse(localStorage.getItem('hsl_custom')||'null');if(Array.isArray(_cs)&&_cs.length===6&&_cs.every(t=>WEAP[t]&&t!=='zomboid'))settings.customSquad=_cs;}catch(e){}
 function saveCustomSquad(){try{localStorage.setItem('hsl_custom',JSON.stringify(settings.customSquad));}catch(e){}}   // tempo is the march pace in ms/hex. Player-issued moves sprint for the first two hexes at tempo/2, then settle into this march pace.
 /* ===================== EXPERIMENTS — default-OFF sandbox toggles (branch exp/triangle-beings) ===================== */
@@ -1031,7 +1058,7 @@ function saveMuted(){try{localStorage.setItem('hsl_muted',AUDIO_MUTED?'1':'0');}
 let PRO=false;try{PRO=localStorage.getItem('hsl_pro')==='1';}catch(e){}
 function isPro(){return true;}
 function setPro(v){PRO=!!v;try{localStorage.setItem('hsl_pro',v?'1':'0');}catch(e){}}
-const BUILD_ID='268';   /* ⚠ BUMP THIS EVERY SHIP, in the same edit as CURRENT_PROJECT_VERSION / CFBundleVersion. It is the ONLY thing that lets two players discover they are on different builds. Multiplayer is host-authoritative for the SIM, but every client still computes fog, exposure rays and all drawing LOCALLY from shared geometry code -- so any build that changes vision or rendering (e.g. 174's muzzle-centring, which moved targetExposureInfo's ray origin) makes a mismatched guest see a genuinely different board from the host. Reported 2026-08-03 by a player on an older app build: "my guys are flickering and I can't see your guys at all, it looks like bullets are coming from nowhere" -- three symptoms, one cause, and nothing in the game said a word about it. This is a WARNING, never a block: it names both builds and lets them play on, because refusing the connection over a UI-only difference would be worse than a cosmetic desync. */
+const BUILD_ID='269';   /* ⚠ BUMP THIS EVERY SHIP, in the same edit as CURRENT_PROJECT_VERSION / CFBundleVersion. It is the ONLY thing that lets two players discover they are on different builds. Multiplayer is host-authoritative for the SIM, but every client still computes fog, exposure rays and all drawing LOCALLY from shared geometry code -- so any build that changes vision or rendering (e.g. 174's muzzle-centring, which moved targetExposureInfo's ray origin) makes a mismatched guest see a genuinely different board from the host. Reported 2026-08-03 by a player on an older app build: "my guys are flickering and I can't see your guys at all, it looks like bullets are coming from nowhere" -- three symptoms, one cause, and nothing in the game said a word about it. This is a WARNING, never a block: it names both builds and lets them play on, because refusing the connection over a UI-only difference would be worse than a cosmetic desync. */
 const DEV_IAP_STUB=false;   /* SHIP VALUE. RevenueCat is wired (see purchasePro/restorePro below), so real purchases route through the store. Leave FALSE for any App Store / TestFlight build -- true would hand out Pro for free on a non-native context or a failed RC init. Flip to true only for a throwaway local unlock test. */
 const DEV_TOOLS=false;   /* SHIP VALUE. Gates the in-app "Pro: ON/OFF" dev toggle in the experiments panel -- a free-unlock backdoor that must NOT ship. Set true locally to test the locked-vs-unlocked gating without a sandbox purchase. */
 const DEV_SHAPE_SHEET_SHORTCUT=true;   /* SHIP PREP: set false before any App Store submission. The centered editor remains available through EXP.shapeSheet; this temporary battle shortcut is only for direct ports tuning. */
@@ -1377,7 +1404,54 @@ function scanSweep(u){if(!u||!u.alive||u.horde||u.dummy)return 0;
   if(r<pan+0.14)return amp*(H(idx,n+7)*2-1);           /* an occasional glance somewhere else in the arc, so the A/B alternation never reads as a metronome */
   return (n%2===0)?postA:postB;}                       /* the common case: hold one of the two posts for the whole beat */
 function aimAngleOf(u,facing){if(facing!=null&&facing!==u.facing){const raw=aimAngle(facing);if(!EXP.triShapes)return raw;const f=beingShape(u.type).fire||0;return normAngle(raw+(u.hand==='L'?-1:1)*f*Math.PI/6);}if(u.aimA!=null&&(_draggingAim||EXP.freeAim)&&u.focusSource==='user')return u.aimA+flinchVeer(u);const raw=(u.faceAngle??aimAngle(u.facing))+flinchVeer(u);if(!EXP.triShapes)return raw;const f=beingShape(u.type).fire||0;return normAngle(raw+(u.hand==='L'?-1:1)*f*Math.PI/6);}   /* CONTINUOUS AIM / FREE AIM (Ian): analog facing -- direct user aim tracks finger exactly, while auto-aim includes class barrel bend */
-function renderExpPanel(){const host=document.getElementById('expBody');if(!host)return;host.innerHTML='';for(const[key,label,desc]of EXP_META){const row=document.createElement('button');row.type='button';row.className='btn ghost';row.style.cssText='display:flex;justify-content:space-between;align-items:center;text-align:left;gap:10px;width:100%;margin:4px 0';row.innerHTML=`<span><b>${label}</b><br><span style="opacity:.6;font-size:12px">${desc}</span></span><span style="font-size:16px">${EXP[key]?'●':'○'}</span>`;row.addEventListener('click',()=>{EXP[key]=!EXP[key];saveExp();renderExpPanel();if(key==='shapeSheet'&&typeof adaptCanvasResolution==='function')adaptCanvasResolution();});   /* the shard/shape sheets can grow the landscape canvas to fit -- re-run the resize the instant either toggles so CH catches up before the next draw() */host.appendChild(row);}
+/* TEAM LOADOUTS — the dev sheet. Lives in the experiments panel, never in CONTROL_GROUPS: Ian said the
+   missing pickers are "fine for the release", so this is a tool for him, not a shipping feature. Each row
+   is one team in its own colour; each slot cycles the five classes exactly like the Custom squad picker,
+   so there is one interaction to learn, not two. Changes land on the next deploy. */
+const DEV_CLASS_CYCLE=['rifle','sniper','shotgun','shield','burst'];
+const DEV_CLASS_MARK={sniper:'SN',rifle:'RF',shotgun:'MG',shield:'SH',burst:'BR'};
+function devSquadFor(t){const ov=DEV_SQUADS[t];
+  return (Array.isArray(ov)&&ov.length)?ov.slice():squadSlots().map(sl=>sl.type);}
+function renderDevSquadSheet(host){
+  if(!host)return;
+  const wrap=document.createElement('div');wrap.style.cssText='margin-top:14px;border-top:1px solid rgba(255,255,255,.08);padding-top:10px';
+  const h=document.createElement('div');h.style.cssText='font:800 10px/1 ui-sans-serif,system-ui;letter-spacing:.12em;text-transform:uppercase;color:#9fb0d4;margin-bottom:2px';
+  h.textContent='Team loadouts · dev';wrap.appendChild(h);
+  const sub=document.createElement('div');sub.style.cssText='font-size:11.5px;color:var(--muted);margin-bottom:8px;line-height:1.4';
+  sub.textContent=devSquadsActive()
+    ?'Overriding the Squad picker. Tap a slot to cycle its class. Applies on the next deploy.'
+    :'Every team currently shares the Squad picker. Tap a slot to give one team its own loadout.';
+  wrap.appendChild(sub);
+  const n=(S&&S.players)||((FORMATS[settings.format]||FORMATS['1v1']).np)||2;
+  for(let t=0;t<n;t++){
+    const row=document.createElement('div');row.className='wrow';
+    const lab=document.createElement('label');lab.textContent=(COLORS[t]||{n:'Team '+t}).n;
+    lab.style.color=(COLORS[t]||{c:''}).c;lab.style.minWidth='58px';row.appendChild(lab);
+    const seg=document.createElement('div');seg.className='seg';
+    const cur=devSquadFor(t);
+    cur.forEach((ty,ix)=>{const b=document.createElement('button');b.type='button';b.className='active';
+      b.textContent=DEV_CLASS_MARK[ty]||'RF';b.title=(WEAP[ty]&&WEAP[ty].label)||ty;
+      b.addEventListener('click',()=>{const list=devSquadFor(t);
+        list[ix]=DEV_CLASS_CYCLE[(DEV_CLASS_CYCLE.indexOf(list[ix])+1)%DEV_CLASS_CYCLE.length];
+        DEV_SQUADS[t]=list;saveDevSquads();renderExpPanel();});
+      seg.appendChild(b);});
+    row.appendChild(seg);
+    if(Array.isArray(DEV_SQUADS[t])&&DEV_SQUADS[t].length){
+      const x=document.createElement('button');x.type='button';x.className='btn ghost';x.textContent='reset';
+      x.style.cssText='padding:4px 8px;font-size:10px';
+      x.addEventListener('click',()=>{delete DEV_SQUADS[t];saveDevSquads();renderExpPanel();});
+      row.appendChild(x);}
+    wrap.appendChild(row);
+  }
+  const foot=document.createElement('button');foot.type='button';foot.className='btn ghost';
+  foot.style.cssText='width:100%;margin-top:8px';foot.textContent='Clear all overrides';
+  foot.addEventListener('click',()=>{DEV_SQUADS={};saveDevSquads();renderExpPanel();});
+  wrap.appendChild(foot);
+  host.appendChild(wrap);
+}
+
+function renderExpPanel(){const host=document.getElementById('expBody');if(!host)return;host.innerHTML='';const _expTail=()=>renderDevSquadSheet(host);
+  for(const[key,label,desc]of EXP_META){const row=document.createElement('button');row.type='button';row.className='btn ghost';row.style.cssText='display:flex;justify-content:space-between;align-items:center;text-align:left;gap:10px;width:100%;margin:4px 0';row.innerHTML=`<span><b>${label}</b><br><span style="opacity:.6;font-size:12px">${desc}</span></span><span style="font-size:16px">${EXP[key]?'●':'○'}</span>`;row.addEventListener('click',()=>{EXP[key]=!EXP[key];saveExp();renderExpPanel();if(key==='shapeSheet'&&typeof adaptCanvasResolution==='function')adaptCanvasResolution();});   /* the shard/shape sheets can grow the landscape canvas to fit -- re-run the resize the instant either toggles so CH catches up before the next draw() */host.appendChild(row);}
   const hd=document.createElement('div');hd.style.cssText='margin:12px 0 4px;font:700 11px ui-sans-serif;color:#8fdcc0;letter-spacing:.5px';hd.textContent='FEEL DIALS — live, saved on this device';host.appendChild(hd);
   for(const[key,label,min,max,step,desc]of TUNE_META){const row=document.createElement('div');row.style.cssText='margin:7px 0';
     row.innerHTML=`<div style="display:flex;justify-content:space-between;font:600 12px ui-sans-serif;color:#dceaff"><span>${label}</span><span id="tv_${key}" style="color:#5ee0f0">${TUNE[key]}</span></div><input type="range" data-tune="${key}" min="${min}" max="${max}" step="${step}" value="${TUNE[key]}" style="width:100%;accent-color:#22d3ee"><div style="opacity:.55;font-size:11px">${desc}</div>`;
@@ -1386,7 +1460,8 @@ function renderExpPanel(){const host=document.getElementById('expBody');if(!host
   if(DEV_TOOLS){const pb=document.createElement('button');pb.type='button';pb.className='btn ghost';pb.style.cssText='width:100%;margin-top:8px';pb.textContent='PRO: '+(isPro()?'ON':'OFF')+' (dev toggle)';pb.addEventListener('click',()=>{setPro(!isPro());afterProChange();renderExpPanel();});host.appendChild(pb);}   /* DEV_TOOLS only: flip the Pro entitlement to test locked vs unlocked. NEVER ships (would be a free-unlock backdoor) -- real state comes from RevenueCat. */
   const kh=document.createElement('div');kh.style.cssText='margin:14px 0 4px;font:700 11px ui-sans-serif;color:#8fdcc0;letter-spacing:.5px';kh.textContent='⌨ KEYBOARD — 1-9 pick a trooper · box-drag to multi-select · click a key to rebind';host.appendChild(kh);
   for(const[act,label]of KEY_META){const row=document.createElement('button');row.type='button';row.className='btn ghost';row.style.cssText='display:flex;justify-content:space-between;align-items:center;width:100%;margin:3px 0;font:600 12px ui-sans-serif';const kv=(_rebind===act)?'press a key…':(KEYMAP[act]===' '?'Space':KEYMAP[act]);row.innerHTML=`<span>${label}</span><span style="color:#5ee0f0;border:1px solid rgba(94,224,240,.4);border-radius:4px;padding:1px 8px;min-width:26px;text-align:center">${kv}</span>`;row.addEventListener('click',()=>{_rebind=act;renderExpPanel();});host.appendChild(row);}
-  const kb=document.createElement('button');kb.type='button';kb.className='btn ghost';kb.textContent='↺ reset keys to defaults';kb.style.cssText='width:100%;margin-top:6px';kb.addEventListener('click',()=>{KEYMAP=Object.assign({},KEYMAP_DEFAULTS);_rebind=null;saveKeys();renderExpPanel();});host.appendChild(kb);}
+  const kb=document.createElement('button');kb.type='button';kb.className='btn ghost';kb.textContent='↺ reset keys to defaults';kb.style.cssText='width:100%;margin-top:6px';kb.addEventListener('click',()=>{KEYMAP=Object.assign({},KEYMAP_DEFAULTS);_rebind=null;saveKeys();renderExpPanel();});host.appendChild(kb);
+  _expTail();}
 /* ===== SETTINGS PANEL (Ian 2026-08-06: "start making a real ship-ready settings panel") — device-level preferences backed by USET/hsl_usettings_v1. Reachable from the home nav and the battle menu. Grow this panel, not the match wizard, when a preference should follow the PLAYER rather than the match. ===== */
 const ORDERS_SEC_CHOICES=[10,15,20,30,45];
 function renderSetPanel(){const host=document.getElementById('setBody');if(!host)return;host.innerHTML='';
@@ -2196,6 +2271,7 @@ function carveCorridor(center,occ){   // a short winding 1-wide hallway flanked 
   return placed;
 }
 function newGame(){if(mp.active&&!mp.isHost){lastEvent='Only the host can start a new game.';renderStatus();return;}
+  applyMyColor();   /* your chosen seat colour is re-seated every match, before anything reads COLORS -- homes, deployment zones, the dock and every FX pull from it */
   if(zomboidsOn()){settings.format='zomboids';settings.mode='teleport';}else if(settings.format==='zomboids')settings.format='1v1';   /* TELEPORT, not 'realtime' (Ian 2026-07-19: "teleport should be zomboids"). This forced the RETIRED mode -- 'realtime' was commented out of the Mode picker on 2026-07-15 ("teleport should be the default now, and real time is a goner"), so Zomboids was the one objective still played on the legacy marching path while every other mode moved to teleport: no warp, no recharge, and the green reach marks teleport deliberately removes. */   // ZOMBOIDS is its own 3-seat format (humans allied vs horde) and realtime-only; leaving the objective restores a sane format
   settings.tempo=DEFAULT_TEMPO;   /* every objective runs at the one baked tempo now; the old CTF pin to Normal has nothing left to pin against */
   if(redroverOn()&&settings.mode==='turns')settings.mode='teleport';   // ROVER needs live movement (defenders warp to plug the end zone while offense marches); any 2+ alliance format works -- offense rotates by alliance each round
@@ -2209,7 +2285,7 @@ function newGame(){if(mp.active&&!mp.isHost){lastEvent='Only the host can start 
   _spawnRot=Math.floor(Math.random()*6);   /* roll the match's corner rotation BEFORE any zone is built, so every objective's zone/home/flag geometry derives from the same draw */
   let _rrAdj=null,_rrOffStart=0,_rrOffAl=null;if(redroverOn()){const al=rrAlliances();_rrOffStart=al.length?Math.floor(Math.random()*al.length):0;_rrOffAl=rrOffenseWindow(al,_rrOffStart,rrOffenseCount(al));const rc=rrCornerSlots(deployTeams,_rrOffAl,null);_rrAdj=rc.adjPairs;buildDeploymentZones(deployTeams,rc.slots);}else if(settings.format==='4-2v2')buildDeploymentZones(deployTeams,twoVTwoSlots(deployTeams));/* 2v2: allies same edge, enemies opposite */else if(settings.format==='6-2v2v2')buildDeploymentZones(deployTeams,pairFormatSlots(deployTeams));/* 2v2v2: three duos, each pair on adjacent corners, the three pairs 120 degrees apart */else buildDeploymentZones(deployTeams);   // ROVER: all teams get one complete seven-cell hex pressed as far into their assigned corner as the board allows; defenders cluster, offense draws the farthest remaining corners
   for(const t of deployTeams){const zone=deploymentZoneFor(t),zc=centers[zone.center],toward=Math.atan2(cy-zc.y,cx-zc.x),fx=Math.cos(toward),fy=Math.sin(toward),px=Math.cos(toward+Math.PI/2),py=Math.sin(toward+Math.PI/2);let rc=0;
-    for(const slot of slots){const tx=zc.x+slot.x*HEXR*1.28*px+slot.y*HEXR*1.24*fx,ty=zc.y+slot.x*HEXR*1.28*py+slot.y*HEXR*1.24*fy,openAll=zone.cells.filter(h=>!used.has(h)),open=redroverOn()?rrEgressCells(openAll,zone.cells):openAll,h=open.reduce((best,k)=>best<0||Math.hypot(centers[k].x-tx,centers[k].y-ty)<Math.hypot(centers[best].x-tx,centers[best].y-ty)?k:best,-1),hp=UNIT_HP[slot.type]||4,initFacing=dirToward(h,center);used.add(h);units.push({team:t,type:slot.type,hex:h,focus:center,focusSource:'auto',facing:initFacing,faceAngle:aimAngle(initFacing),alive:true,hp,maxHp:hp,reacted:false,reactCd:0,cooldown:0,moveCooldown:0,order:[],state:'hold',userOrder:false,think:0,sprinting:false,hand:slot.type==='rifle'?(rc++%2?'L':'R'):null});}homes[t]=zone.center;}   /* every squad starts in a real corner deployment hex; the preset is valid immediately, but commanders may rearrange only inside their own zone before readying -- Rover fills best-EGRESS cells first (rrEgressCells), not just skipping the centre: the true corner-tip cell can have as few outward exits as the centre (sometimes zero on-board neighbours outside its own zone at all), so excluding only the centre still parked a trooper on a dead-end tip. Falls back to worse cells only once the whole zone's better ones are already taken. */
+    for(const slot of squadSlotsFor(t)){const tx=zc.x+slot.x*HEXR*1.28*px+slot.y*HEXR*1.24*fx,ty=zc.y+slot.x*HEXR*1.28*py+slot.y*HEXR*1.24*fy,openAll=zone.cells.filter(h=>!used.has(h)),open=redroverOn()?rrEgressCells(openAll,zone.cells):openAll,h=open.reduce((best,k)=>best<0||Math.hypot(centers[k].x-tx,centers[k].y-ty)<Math.hypot(centers[best].x-tx,centers[best].y-ty)?k:best,-1),hp=UNIT_HP[slot.type]||4,initFacing=dirToward(h,center);used.add(h);units.push({team:t,type:slot.type,hex:h,focus:center,focusSource:'auto',facing:initFacing,faceAngle:aimAngle(initFacing),alive:true,hp,maxHp:hp,reacted:false,reactCd:0,cooldown:0,moveCooldown:0,order:[],state:'hold',userOrder:false,think:0,sprinting:false,hand:slot.type==='rifle'?(rc++%2?'L':'R'):null});}homes[t]=zone.center;}   /* every squad starts in a real corner deployment hex; the preset is valid immediately, but commanders may rearrange only inside their own zone before readying -- Rover fills best-EGRESS cells first (rrEgressCells), not just skipping the centre: the true corner-tip cell can have as few outward exits as the centre (sometimes zero on-board neighbours outside its own zone at all), so excluding only the centre still parked a trooper on a dead-end tip. Falls back to worse cells only once the whole zone's better ones are already taken. */
   const reserved=new Set(deploymentZones.flatMap(z=>z.cells)),occ=h=>used.has(h)||reserved.has(h);   // setup zones stay clear of bunkers and random walls, so every legal placement cell remains usable
   for(let t=0;t<settings.players;t++){if(zomboidsOn()&&(t===Z_TEAM||homes[t]==null))continue;placeTeamBunker(t,occ,center);}   // guaranteed cover in front of every team -- the old version placed 3 independent single hexes with no retry, so some teams could end up with nothing. Horde/empty seats get no bunker.
   const densityMul=settings.walls==='sparse'||settings.walls===6?.08:(settings.walls==='dense'||settings.walls===20?.24:.16);
@@ -4258,14 +4334,22 @@ function renderWizard(){const st=WIZ[0];if(!st)return;wizStep=1;
         b.disabled=!!disabled;if(!disabled)b.addEventListener('click',()=>{if(proLocked(key,v)){openPaywall(key,v);return;}settings[key]=typeof v==='number'?v:String(v);if(key==='difficulty')saveDifficulty();applySetupChange();});seg.appendChild(b);});
       group.appendChild(seg);(cfg.adv?advSink():body).appendChild(group);}}
   if(st.seats){const sr=document.createElement('div');sr.className='wrow';const lab=document.createElement('label');lab.textContent='Seats';sr.appendChild(lab);
-    const row=document.createElement('div');row.className='seat-row';row.id='seats';sr.appendChild(row);advSink().appendChild(sr);renderSeats();}   /* Seats moved into Advanced with the one-screen rework -- the default (you + AI) is right for nearly every solo match */
+    const row=document.createElement('div');row.className='seat-row';row.id='seats';sr.appendChild(row);body.appendChild(sr);renderSeats();
+    if(!mp.active){const cr=document.createElement('div');cr.className='wrow';const cl=document.createElement('label');cl.textContent='You are';cr.appendChild(cl);
+      const cs=document.createElement('div');cs.className='seg';
+      PALETTE.forEach((col,ix)=>{const b=document.createElement('button');b.type='button';b.title=col.n;
+        b.textContent=col.n;b.style.color=col.c;b.style.borderColor=col.c;
+        if((settings.myColor|0)===ix)b.classList.add('active');
+        b.addEventListener('click',()=>setMyColor(ix));cs.appendChild(b);});
+      cr.appendChild(cs);body.appendChild(cr);}   /* MULTIPLAYER HIDES THIS: colour there is claimed in the lobby from the unclaimed pool and rides the host snapshot, so a second picker would fight it. */
+  }   /* SEATS STAYS ON THE MAIN SCREEN. The one-screen rework filed it under Advanced on the theory that "you + AI" is right for nearly every solo match; Ian found it missing within hours ("there's no way of deciding which team is AI and which team is not ... not on local play anyway"). Who you are actually playing against is not a niche toggle -- it is half of what a match IS. Advanced is for things you set once and forget. */
   if(advWrap)body.appendChild(advWrap);   /* the Advanced disclosure always sits last */
   ruleSummary.style.display='';
   document.getElementById('wizNext').textContent='DEPLOY';
   markAll();renderRuleSummary();setupArtStart();body.scrollTop=keepScroll;requestAnimationFrame(updateWizardScrollHint);}
 function markAll(){document.querySelectorAll('[data-group]').forEach(seg=>{const k=seg.dataset.group;seg.querySelectorAll('button').forEach(b=>b.classList.toggle('active',String(settings[k])===b.dataset.v));});}
 function renderSeats(){const host=document.getElementById('seats');if(!host)return;host.innerHTML='';for(let p=0;p<settings.players;p++){if(settings.seats[p]===undefined)settings.seats[p]=p!==0;const s=document.createElement('button');s.className='btn ghost';s.type='button';s.style.color=COLORS[p].c;s.textContent=`${COLORS[p].n}: ${settings.seats[p]?'AI':'Human'}`;s.addEventListener('click',()=>{settings.seats[p]=!settings.seats[p];renderSeats();if(S&&p<S.players){S.ai[p]=settings.seats[p];ensureSelection();refreshReach();}});host.appendChild(s);}}   // #seats only exists while the wizard's step 1 is rendered -- guard for calls from mpApply
-function renderRuleSummary(){if(!ruleSummary)return;const f=FORMATS[settings.format]||FORMATS['1v1'],teams=f.ally.some((a,i,arr)=>i<f.np&&arr.indexOf(a)!==i),mode=f.np===2?'duel':teams?'teams':'free-for-all',tempo=tempoMeta().name,objective=settings.objective==='ctf'?'CTF':settings.objective==='raid'?'Flag Raid':settings.objective==='zomboids'?'Zomboids':settings.objective==='redrover'?'Rover':'Team Wreckmatch',squadSize=squadSlots().length,squadLabel=(CONTROL_GROUPS.find(g=>g.key==='squad').options.find(o=>o[0]===settings.squad)||[])[1]||'Standard',moveMode=settings.mode==='turns'?'simultaneous turn-based':settings.mode==='teleport'?'teleport':'real-time',goal=settings.objective==='tdm'?` · first to ${wreckTarget()} after a complete round`:'',turnRule=settings.mode==='turns'?` · ${TB_ACTIONS} actions/player · 20s round; ends early when every player is out`:'';ruleSummary.innerHTML=`<b>${objective}</b><span class="meta">${moveMode}${turnRule} · ${f.np} squads · ${mode}${goal} · ${squadLabel} (${squadSize} troopers each) · ${settings.walls} walls${settings.mode==='turns'?'':` · AI ${settings.difficulty}`}</span>`;}   /* tempo dropped from the summary with the picker -- it is baked to Fast for every match now, so printing it was a constant that read like a setting. Also closes the dangling separator the turn-based branch used to leave hanging. */
+function renderRuleSummary(){if(!ruleSummary)return;const f=FORMATS[settings.format]||FORMATS['1v1'],teams=f.ally.some((a,i,arr)=>i<f.np&&arr.indexOf(a)!==i),mode=f.np===2?'duel':teams?'teams':'free-for-all',tempo=tempoMeta().name,objective=settings.objective==='ctf'?'CTF':settings.objective==='raid'?'Flag Raid':settings.objective==='zomboids'?'Zomboids':settings.objective==='redrover'?'Rover':'Team Wreckmatch',squadSize=squadSlots().length,squadLabel=(CONTROL_GROUPS.find(g=>g.key==='squad').options.find(o=>o[0]===settings.squad)||[])[1]||'Standard',moveMode=settings.mode==='turns'?'simultaneous turn-based':settings.mode==='teleport'?'teleport':'real-time',goal=settings.objective==='tdm'?` · first to ${wreckTarget()} after a complete round`:'',turnRule=settings.mode==='turns'?` · ${TB_ACTIONS} actions/player · 20s round; ends early when every player is out`:'';ruleSummary.innerHTML=`<b>${objective}</b><span class="meta">${moveMode}${turnRule} · ${f.np} squads · ${mode}${goal} · ${squadLabel} (${squadSize} troopers each) · ${settings.walls} walls${settings.mode==='turns'?'':` · AI ${settings.difficulty}`}${devSquadsActive()?' · <b style="color:#ffc400">per-team loadouts</b>':''}</span>`;}   /* a live DEV_SQUADS override is called out here on purpose: it persists in localStorage, so without a visible marker a match set up weeks ago would just quietly be asymmetric and read as a balance bug. */   /* tempo dropped from the summary with the picker -- it is baked to Fast for every match now, so printing it was a constant that read like a setting. Also closes the dangling separator the turn-based branch used to leave hanging. */
 
 function mpLiveHumanCount(){if(!mp.active)return 0;if(mp.isHost)return mp.conns.filter(c=>c&&c.open&&c._team!=null).length;const c=mp.conns[0];return c&&c.open?1:0;}
 /* ===== PRESENCE: one truthful per-seat connection status every device shares ===== */
