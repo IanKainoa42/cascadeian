@@ -1064,7 +1064,7 @@ function saveMuted(){try{localStorage.setItem('hsl_muted',AUDIO_MUTED?'1':'0');}
 let PRO=false;try{PRO=localStorage.getItem('hsl_pro')==='1';}catch(e){}
 function isPro(){return true;}
 function setPro(v){PRO=!!v;try{localStorage.setItem('hsl_pro',v?'1':'0');}catch(e){}}
-const BUILD_ID='279';   /* ⚠ BUMP THIS EVERY SHIP, in the same edit as CURRENT_PROJECT_VERSION / CFBundleVersion. It is the ONLY thing that lets two players discover they are on different builds. Multiplayer is host-authoritative for the SIM, but every client still computes fog, exposure rays and all drawing LOCALLY from shared geometry code -- so any build that changes vision or rendering (e.g. 174's muzzle-centring, which moved targetExposureInfo's ray origin) makes a mismatched guest see a genuinely different board from the host. Reported 2026-08-03 by a player on an older app build: "my guys are flickering and I can't see your guys at all, it looks like bullets are coming from nowhere" -- three symptoms, one cause, and nothing in the game said a word about it. This is a WARNING, never a block: it names both builds and lets them play on, because refusing the connection over a UI-only difference would be worse than a cosmetic desync. */
+const BUILD_ID='280';   /* ⚠ BUMP THIS EVERY SHIP, in the same edit as CURRENT_PROJECT_VERSION / CFBundleVersion. It is the ONLY thing that lets two players discover they are on different builds. Multiplayer is host-authoritative for the SIM, but every client still computes fog, exposure rays and all drawing LOCALLY from shared geometry code -- so any build that changes vision or rendering (e.g. 174's muzzle-centring, which moved targetExposureInfo's ray origin) makes a mismatched guest see a genuinely different board from the host. Reported 2026-08-03 by a player on an older app build: "my guys are flickering and I can't see your guys at all, it looks like bullets are coming from nowhere" -- three symptoms, one cause, and nothing in the game said a word about it. This is a WARNING, never a block: it names both builds and lets them play on, because refusing the connection over a UI-only difference would be worse than a cosmetic desync. */
 const DEV_IAP_STUB=false;   /* SHIP VALUE. RevenueCat is wired (see purchasePro/restorePro below), so real purchases route through the store. Leave FALSE for any App Store / TestFlight build -- true would hand out Pro for free on a non-native context or a failed RC init. Flip to true only for a throwaway local unlock test. */
 const DEV_TOOLS=false;   /* SHIP VALUE. Gates the in-app "Pro: ON/OFF" dev toggle in the experiments panel -- a free-unlock backdoor that must NOT ship. Set true locally to test the locked-vs-unlocked gating without a sandbox purchase. */
 const DEV_SHAPE_SHEET_SHORTCUT=true;   /* SHIP PREP: set false before any App Store submission. The centered editor remains available through EXP.shapeSheet; this temporary battle shortcut is only for direct ports tuning. */
@@ -2260,7 +2260,7 @@ function enterRegroup(){if(!S)return;
 function markReady(forceTeam){if(!S||S.over||rt.phase!=='regroup')return;if(tutorial.active&&tutorial.step==='regroup'&&!continueTutorialBattle())return;const t=forceTeam!=null?forceTeam:S.current;if(forceTeam==null&&!isMyTeam(t))return;if(rt.ready.has(t))rt.ready.delete(t);else rt.ready.add(t);lastEvent=`${COLORS[t].n} commander ${rt.ready.has(t)?'ready':'still planning'}.`;renderAP();renderStatus();if(allHumanReady())startWave();}   /* everyone ready = start the next wave. The old branch here set rt.fastCasc to rip a still-collapsing ring at 9x instead of skipping it -- dead now that the ring never falls inside a regroup at all. */   // forceTeam: host applying a network ready-request on behalf of a connected peer's team
 function renderTurnPhaseGuide(){const guide=document.getElementById('turnPhaseGuide'),title=document.getElementById('turnPhaseTitle'),sub=document.getElementById('turnPhaseSub'),pod=document.getElementById('phasePod'),active=!!(S&&!S.over&&rt.phase==='turns'&&tb),sim=active&&tb.phase==='resolve',locked=active&&tb.phase==='plan'&&tb.ready&&tb.ready.has(tb.seat);document.body.classList.toggle('tb-planning',active&&!sim);document.body.classList.toggle('tb-simulating',sim);if(pod){pod.classList.toggle('tb-plan',active&&!sim);pod.classList.toggle('tb-resolve',sim);pod.classList.toggle('tb-focus',active&&!sim&&!locked&&performance.now()<(tb.hudFocusUntil||0));}if(!guide)return;const guideOn=active&&!sim&&(locked||(((tb&&tb.round)||1)<=2&&tbActiveInput()));guide.classList.toggle('show',guideOn);   /* teach only on YOUR turn -- the banner titled itself "YOUR TURN" during the AI's seat too, which is exactly the confusion it exists to prevent */guide.classList.toggle('sim',false);guide.classList.toggle('locked',locked);if(!guideOn)return;   /* THE BANNER TEACHES, THEN LEAVES (Ian 2026-08-06: "the overlapping of things is not letting the map do the work"). During the resolve it drew a SIMULATING strip across mid-board that restated the magenta outline and the pod; from round 3 on the SPENDS/FREE lesson is furniture covering the play. Now: rounds 1-2 teach, PLAN LOCKED still shows whenever you are genuinely waiting, the resolve shows nothing at all. */
   if(locked){if(title)title.textContent='PLAN LOCKED · WAITING FOR THE ROUND';if(sub)sub.textContent=`Your orders are saved. The simulation begins when every participating player commits or the ${Math.round(tbShotClockMs()/1000)}-second clock expires.`;return;}
-  if(title)title.textContent='YOUR TURN · ONE ACTION';if(sub)sub.textContent='Move, fire, push a wall, SUPPRESS or SPIN — any one ends your turn. Aiming (tap open ground) and shoulder flips are free. Green hexes are the selected trooper’s moves — each class has its own pattern.';}   /* rewritten for chess mode -- the old copy taught the retired shared-pool economy ("SPENDS 1 ... FREE TO TEAM"), complete with a warp-distance ledger that no longer exists. One action, free aim, class movement: those are the three things a first-timer actually has to learn. */   // always teach the two ledgers: the shared three-action pool and each trooper's personal AP   /* title no longer repeats the X/Y ACTIONS LEFT count (fixed 2026-08-03) -- phasePod's "Round N · X/Y ACTIONS" already shows that number in the persistent HUD; this banner and tbLog's own header were both re-stating the identical fraction on screen at once. This banner keeps its unique job: teaching what's free vs. what spends the pool. */
+  if(title)title.textContent='YOUR TURN · ONE ACTION';if(sub)sub.textContent='Move, fire, push a wall, SUPPRESS or SPIN — any one ends your turn. Aiming (tap open ground) and shoulder flips are free, and troopers fire back on their own when an enemy crosses their lane. Green hexes are the selected trooper’s moves — each class has its own pattern.';}   /* rewritten for chess mode -- the old copy taught the retired shared-pool economy ("SPENDS 1 ... FREE TO TEAM"), complete with a warp-distance ledger that no longer exists. One action, free aim, class movement: those are the three things a first-timer actually has to learn. */   // always teach the two ledgers: the shared three-action pool and each trooper's personal AP   /* title no longer repeats the X/Y ACTIONS LEFT count (fixed 2026-08-03) -- phasePod's "Round N · X/Y ACTIONS" already shows that number in the persistent HUD; this banner and tbLog's own header were both re-stating the identical fraction on screen at once. This banner keeps its unique job: teaching what's free vs. what spends the pool. */
 function updatePhaseUI(){if(!S)return;const lab=document.getElementById('phaseLabel'),clock=document.getElementById('phaseClock'),pb=document.getElementById('pass'),rb=document.getElementById('readyBtn');if(!lab||!clock||!pb||!rb)return;
   renderTurnPhaseGuide();
   const pod=document.getElementById('phasePod');if(pod)pod.style.display=(!S.over&&rt.phase==='setup')?'none':'';   /* during setup the pod is dead weight (the START BATTLE toast is the CTA) -- a stuck "Setup" pill just confuses */
@@ -3717,10 +3717,8 @@ function tbNoShotWhy(ui,hui){const u=units[ui],e=units[hui];if(!u||!e)return 'no
   if(gv&&!gv.has(e.hex))return 'no line of sight — that is only a last-known position';
   const d=hexDistance(u.hex,e.hex),rng=WEAP[u.type]?.range||3;
   if(d>rng)return `out of range — ${d} hexes, ${WEAP[u.type].label} reaches ${rng}`;
-  const info=coverInfo(u,e.hex,dirToward(u.hex,e.hex));
-  if(!info||info.chance<=0)return 'no firing lane from this position';
-  const oc=tbOutcome(ui,hui,info);
-  return(oc&&oc.label==='WALL')?'a wall eats that shot':'another body is in the way';}   // one honest sentence for a refused fire tap, most-specific reason first -- the silent version of this tap read as "shooting is broken"
+  const oc=tbOutcome(ui,hui,null);
+  return(oc&&oc.label==='WALL')?'a wall eats that shot':'another body is in the way';}   // mirrors the chess candidacy rule exactly: sight, range, then the physical ray -- no hit-model heuristics anywhere in the answer   // one honest sentence for a refused fire tap, most-specific reason first -- the silent version of this tap read as "shooting is broken"
 function tbResetTurnLog(team){if(!tb)return;tb.log=[];for(const u of units)if(u.alive&&u.team===team&&u.tbStunnedThisTurn)tbLogAction(u,'stunned — misses this turn',0,'turn lost');
   for(const u of units)if(u.alive&&u.team===team&&!u.tbStunnedThisTurn&&tbWarpGrounded(u))tbLogAction(u,`grounded after a long warp — can still fire`,0,(u.tbWarpLock||0)>0?`${(u.tbWarpLock||0)+1} turns`:'1 turn');}   // a trooper that cannot move needs to SAY so at the top of the turn, or it just reads as an unresponsive unit
 function renderTbLog(){const host=document.getElementById('tbLog');if(!host)return;const on=rt.phase==='turns'&&tb&&S&&!S.over&&humanTeamsAlive().some(t=>isMyTeam(t));host.classList.toggle('show',!!on);if(!on){host.innerHTML='';return;}   /* the ledger stays up during the OTHER seats' turns now -- it is a rolling history, and the AI's half-second turns are exactly what a first-timer needs replayed. The old gate (my seat only) blanked it the instant anything worth reading happened. */
@@ -3748,7 +3746,8 @@ function tbBeginTurn(seat){
     if((u.tbWarpLock||0)>0){u.tbWarpLockedThisTurn=true;u.tbWarpLock--;}else u.tbWarpLockedThisTurn=false;
     if((u.tbStunTurns||0)>0){u.tbStunTurns--;u.tbStunnedThisTurn=true;u.tbAp=0;u.state='stunned';if(u.alive)tbLogAction(u,'stunned — misses this turn',0,'turn lost');}
     else{u.tbStunnedThisTurn=false;if(u.state==='stunned')u.state='hold';}}});   /* CONSUME-THEN-DECREMENT, the tbRefreshUnitActions contract, now living where chess mode actually begins a turn. The old WEGO round refresh was that logic's only caller and the chess rework orphaned it -- so a surprise stun (stunUnit sets tbStunTurns=1) was NEVER ticked down and the trooper froze for the rest of the match. The stun is consumed on the victim's next turn and only that turn; the ledger row is how a first-timer learns why their piece refused an order. */
-  S.sel=tbPickSeatSel(seat);tbThreatDirty=true;tbUpdateIntel();
+  const _keepSel=S.sel!=null&&units[S.sel]&&units[S.sel].alive&&isMyTeam(units[S.sel].team)&&!isMyTeam(seat);
+  if(!_keepSel)S.sel=tbPickSeatSel(seat);tbThreatDirty=true;tbUpdateIntel();   /* AN INSPECTION SURVIVES THE SEAT CHANGE: a trooper you selected to watch the board through stays selected while an AI (or a remote player) takes their turn -- tbPickSeatSel used to null it the moment the seat left your team. Hotseat is deliberately excluded (!isMyTeam(seat) is false when the incoming seat is another local human), so pass-and-play still hands over a clean board. */
   if(isHumanTeam(seat)){
     if(isMyTeam(seat))playTurnTone();
     lastEvent=isMyTeam(seat)?(COLORS[seat].n+"'s turn — pick a piece to move, shoot, or push."):(COLORS[seat].n+"'s turn.");
@@ -3774,6 +3773,29 @@ function tbEndTurn(){
   tbBeginTurn(alive[idx]);
 }
 
+function tbReactionShots(mi,path){const mv=units[mi];if(!tb||!mv||!mv.alive||!path||path.length<2)return false;let fired=false;
+  for(let di=0;di<units.length;di++){const dfd=units[di];
+    if(!dfd||!dfd.alive||di===mi||dfd.horde||allyOf(dfd.team)===allyOf(mv.team)||dfd.suppressing||tbIsStunned(dfd))continue;
+    if(dfd.tbReactRound===tb.round)continue;   /* ONE reaction per trooper per round -- refreshed by the round counter itself, so holding a lane is strong but a squad walking single-file through one cone is not deleted by a lone camper. SUPPRESS keeps its own dedicated intercept (skipped above) as the deliberate, turn-spending version. */
+    const lane=new Set(laneHexes(dfd));let crossed=-1;
+    for(let k=1;k<path.length;k++)if(lane.has(path[k])){crossed=path[k];break;}
+    if(crossed<0)continue;
+    if(hexDistance(dfd.hex,crossed)>((WEAP[dfd.type]&&WEAP[dfd.type].range)||3))continue;
+    const _oh=mv.hex;mv.hex=crossed;occTouch();const oc=tbOutcome(di,mi,null);mv.hex=_oh;occTouch();   /* the snap-shot is judged where the mover CROSSED, not where it ended up -- a knight-jump (2-entry path) is therefore only catchable at its landing hex, and the same physical-ray law that governs every deliberate shot governs this one */
+    if(!oc||!oc.kill)continue;
+    dfd.tbReactRound=tb.round;fired=true;
+    (dfd.seen||(dfd.seen=new Set())).add(mi);dfd.watch=mi;
+    playTrooperSfx(dfd.type,dfd.hex);
+    const config=bodyPortConfig(dfd.type),volley=portVolley(config),d=hexDistance(dfd.hex,crossed),travelMs=flightMs(d);let landed=0;
+    for(const v of volley){const mzv=muzzleOffForPort(dfd,(v&&v.port)||'black');
+      shotFx.push({from:dfd.hex,to:crossed,hit:true,flanked:false,col:COLORS[dfd.team].c,targetCol:COLORS[mv.team].c,t:gnow(),sT:simClock,chance:1,shooter:di,target:mi,weapon:dfd.type,travelMs,life:travelMs+400+(v.delay||0),dmg:1,delay:v.delay||0,resolved:true,overlap:1,mz:mzv});
+      if(mv.alive){damageUnit(mi,di,1,{fromHex:dfd.hex,toHex:crossed});landed++;}}
+    const mvn=COLORS[mv.team].n+' '+WEAP[mv.type].label;
+    lastEvent=COLORS[dfd.team].n+' '+WEAP[dfd.type].label+' reacts — '+(mv.alive?('hits '+mvn+(landed>1?' ×'+landed:'')+'.'):('takes '+mvn+'!'));
+    tbLogAction(dfd,mv.alive?`reacts — hits ${mvn}${landed>1?' ×'+landed:''}`:`reacts — takes ${mvn}`,0,'react');
+    if(!mv.alive)break;
+  }
+  return fired;}   /* AUTOMATIC OVERWATCH (Ian 2026-08-18: "when somebody crosses my line of sight when it's not my turn, my trooper should shoot at that person"). The free aim you set on your turn IS your overwatch net on theirs -- crossing a watched lane draws a full trigger pull (same volley as a deliberate shot), which finally makes turn-based obey the game's real-time doctrine: never cross a live lane. Symmetric on purpose: the AI's lanes react to you the same way. No chains -- a reaction never triggers reactions. Runs inside tbExecuteMove, which is host-side, so MP guests cannot fake or skip it. */
 function tbExecuteMove(ui,path){
   if(!tb||tb.busy||!S||S.over)return false;
   const u=units[ui];if(!u||!u.alive||!path||path.length<2)return false;
@@ -3791,6 +3813,8 @@ function tbExecuteMove(ui,path){
   }
   const _mvN=path.length-1;lastEvent=COLORS[u.team].n+" "+WEAP[u.type].label+" moves "+_mvN+" hex"+(_mvN===1?"":"es")+".";
   tbLogAction(u,`moves ${_mvN} hex${_mvN===1?'':'es'}`,0,'turn');if(isHumanTeam(u.team)&&isMyTeam(u.team))guideMark('tbActed');
+  tbReactionShots(ui,path);
+  if(!u.alive){refreshReach();renderStatus();draw();gTimeout(()=>{if(tb)tbEndTurn();},Math.max(360,(u.glideDur||220)+120));return true;}   /* cut down mid-crossing: the turn still ends normally, and the suppress-intercept loop below is skipped rather than invited to shoot a corpse */
   refreshReach();renderStatus();draw();
 
   // Check if any opponent is in suppressing overwatch that covers the destination:
@@ -3823,23 +3847,28 @@ function tbExecuteShoot(si,ti){
   if(!tb||tb.busy||!S||S.over)return;
   const s=units[si],t=units[ti];if(!s||!t||!s.alive||!t.alive)return;
   if(mp.active&&!mp.isHost){mpSendInput({action:'tbshoot',shooter:si,target:ti});return;}
-  {const _gi=coverInfo(s,t.hex,dirToward(s.hex,t.hex)),_oc=(_gi&&_gi.chance>0)?tbOutcome(si,ti,_gi):null;
+  {const _rng=(WEAP[s.type]&&WEAP[s.type].range)||3,_oc=hexDistance(s.hex,t.hex)<=_rng?tbOutcome(si,ti,null):null;
    if(!_oc||!_oc.kill){lastEvent=COLORS[s.team].n+" "+WEAP[s.type].label+" has no clear shot — the lane is blocked.";renderStatus();return false;}}   /* THE RAY IS THE RULE. tbOutcome walks the actual fire lane (pure geometry, no intel) and its TAKE/WALL/BLOCKED labels are painted on every ringed target -- but this executor used to deal its 1 damage unconditionally, so the AI (and a tampered MP guest, this runs host-side) could shoot straight through the wall the label said would eat the round. A refused shot never sets tb.busy, so callers still hold the turn: the player keeps their action, the AI dispatcher falls through to its move/suppress options, and a declined overwatch intercept ends the turn via its own handler. */
   tb.busy=true;
   s.facing=dirToward(s.hex,t.hex);s.faceAngle=aimAngle(s.facing);
+  const _sc=centers[s.hex],_tc2=centers[t.hex];if(_sc&&_tc2){s.aimA=Math.atan2(_tc2.y-_sc.y,_tc2.x-_sc.x);s.faceAngle=s.aimA;}   /* the fired state must agree with the fire: focusSource='user' below makes aimAngleOf read aimA, and leaving the OLD hand-aim there pointed the drawn cone (and any later ray preview) somewhere the shot never went */
   setUnitFocus(s,t.hex);s.focusSource='user';s.watch=ti;
   (s.seen||(s.seen=new Set())).add(ti);
   playTrooperSfx(s.type,s.hex);
   const config=bodyPortConfig(s.type),volley=portVolley(config);
-  const mz=muzzleOffForPort(s,(volley[0]&&volley[0].port)||'black');
   const d=hexDistance(s.hex,t.hex),travelMs=flightMs(d);
-  shotFx.push({from:s.hex,to:t.hex,hit:true,flanked:false,col:COLORS[s.team].c,targetCol:COLORS[t.team].c,t:gnow(),sT:simClock,chance:1,shooter:si,target:ti,weapon:s.type,travelMs,life:travelMs+400,dmg:1,delay:0,resolved:true,overlap:1,mz});
-  damageUnit(ti,si,1,{fromHex:s.hex,toHex:t.hex});
+  let landed=0;
+  for(const v of volley){
+    const mzv=muzzleOffForPort(s,(v&&v.port)||'black');
+    shotFx.push({from:s.hex,to:t.hex,hit:true,flanked:false,col:COLORS[s.team].c,targetCol:COLORS[t.team].c,t:gnow(),sT:simClock,chance:1,shooter:si,target:ti,weapon:s.type,travelMs,life:travelMs+400+(v.delay||0),dmg:1,delay:v.delay||0,resolved:true,overlap:1,mz:mzv});
+    if(t.alive){damageUnit(ti,si,1,{fromHex:s.hex,toHex:t.hex});landed++;}
+  }   /* THE WHOLE TRIGGER PULL (Ian 2026-08-18: "every person shoots once instead of ... its allotted shots per trigger pull"). The turn used to spend one bolt regardless of class -- a burst's ×3 and a second barrel existed only in real-time. Every bolt of portVolley now fires: damage resolves per bolt through the same 3-layer model (WEAP.bite still makes a sniper's single round the heavy one), visuals stagger on each bolt's own delay exactly like the real-time volley, and bolts after the kill are held rather than wasted on a dead piece. Class attack power in chess mode is now the same shape-sheet number the player already tunes. */
+  const _volMs=volley.length?(volley[volley.length-1].delay||0):0;
   const _tn=COLORS[t.team].n+" "+WEAP[t.type].label;
-  lastEvent=t.alive?COLORS[s.team].n+" "+WEAP[s.type].label+" hits "+_tn+" — armour takes it.":COLORS[s.team].n+" "+WEAP[s.type].label+" takes "+_tn+"!";   /* "takes" is capture language -- only say it when the piece actually leaves the board. A landed shot chews plate/body/core in order (damageUnit's 3-layer model), so most hits are "armour takes it", and telling a first-timer a surviving piece was "taken" read as the game lying. */
-  tbLogAction(s,t.alive?`hits ${_tn}`:`takes ${_tn}`,0,'turn');if(isHumanTeam(s.team)&&isMyTeam(s.team))guideMark('tbActed');
+  lastEvent=t.alive?COLORS[s.team].n+" "+WEAP[s.type].label+" hits "+_tn+(landed>1?" ×"+landed:"")+" — armour takes it.":COLORS[s.team].n+" "+WEAP[s.type].label+" takes "+_tn+"!";   /* "takes" is capture language -- only say it when the piece actually leaves the board. A landed shot chews plate/body/core in order (damageUnit's 3-layer model), so most hits are "armour takes it", and telling a first-timer a surviving piece was "taken" read as the game lying. */
+  tbLogAction(s,t.alive?`hits ${_tn}${landed>1?' ×'+landed:''}`:`takes ${_tn}`,0,'turn');if(isHumanTeam(s.team)&&isMyTeam(s.team))guideMark('tbActed');
   refreshReach();renderStatus();draw();
-  gTimeout(()=>{if(tb)tbEndTurn();},380);
+  gTimeout(()=>{if(tb)tbEndTurn();},380+_volMs);
   return true;
 }
 
@@ -3914,6 +3943,14 @@ function tbRunAITurn(seat){
   if(!tb||S.over||tb.seat!==seat||!S.ai[seat]||tb.busy)return;
   const myUnits=units.map((u,i)=>u&&u.alive&&u.team===seat?i:-1).filter(i=>i>=0);
   if(!myUnits.length){tbEndTurn();return;}
+  const _aiSel=i=>{if(!(S.sel!=null&&units[S.sel]&&units[S.sel].alive&&isMyTeam(units[S.sel].team)))S.sel=i;};   /* the AI highlights its acting piece only when the player isn't using the selection themselves -- an off-turn inspection (see tbPointerUp) must not be yanked away mid-look; nothing in the executors reads S.sel, it is pure spotlight */
+  {const g=allyOf(seat),gv=tbIntel&&tbIntel.vis?tbIntel.vis.get(g):null;
+   for(const ui of myUnits){const u=units[ui];let tgt=-1,td=1e9;
+     for(let ei=0;ei<units.length;ei++){const e=units[ei];if(!e.alive||allyOf(e.team)===g)continue;const hx=(gv&&gv.has(e.hex))?e.hex:((e.tbSeen&&e.tbSeen[g]!=null)?e.tbSeen[g]:-1);if(hx<0)continue;const dd=hexDistance(u.hex,hx);if(dd<td){td=dd;tgt=hx;}}
+     if(tgt>=0){const tc=centers[tgt],uc=centers[u.hex];if(tc&&uc){u.aimA=Math.atan2(tc.y-uc.y,tc.x-uc.x);u.faceAngle=u.aimA;u.facing=aimDirFromVector(Math.cos(u.aimA),Math.sin(u.aimA));u.focusSource='user';setUnitFocus(u,tgt);}}
+     else{const a0=(u.faceAngle!=null?u.faceAngle:aimAngle(u.facing))+Math.PI/3;u.aimA=a0;u.faceAngle=a0;u.facing=aimDirFromVector(Math.cos(a0),Math.sin(a0));u.focusSource='user';}
+     _laneHexMemo.delete(ui);}
+   tbThreatDirty=true;tbUpdateIntel();}   /* THE AI USES ITS FREE AIM (found in the same session that made aim load-bearing: a 48-round AI-vs-AI standoff with every `seen:false` -- chess mode never re-aimed an AI trooper, so both squads stared at nothing forever, a chicken-and-egg blindness the old WEGO planner never had). Honest inputs only, per the no-sixth-sense rule: a squad-visible enemy gets a lock, a last-seen ghost gets a turn toward it, and a blind trooper SWEEPS 60 degrees per turn -- a scan that finds things, not an oracle. This is also what keeps its reaction lanes (tbReactionShots) pointed somewhere that matters, both for and against the player. Lane memos are busted per-unit exactly like tbAfterAim, then intel recomputes once. */
 
   // 1. Direct Take: fire only down a lane the ray actually completes (TAKE) — the same rule the player's tap obeys
   let bestShooter=-1,bestTarget=-1,bestShotScore=-1;
@@ -3922,12 +3959,12 @@ function tbRunAITurn(seat){
     for(const t of targets){
       const oc=tbOutcome(ui,t.i,t.info);
       if(!oc||!oc.kill)continue;   /* WALL/BLOCKED lanes used to score chance*100 and fire anyway for full damage -- the executor now refuses them, and an unhandled refusal here would strand the turn */
-      const score=1000+t.info.chance*100;
+      const score=1000-hexDistance(units[ui].hex,units[t.i].hex);   // info.chance is a constant 1 under chess candidacy, so the tiebreak is the honest one: take the nearest completed lane
       if(score>bestShotScore){bestShotScore=score;bestShooter=ui;bestTarget=t.i;}
     }
   }
   if(bestShooter>=0){
-    S.sel=bestShooter;
+    _aiSel(bestShooter);
     if(tbExecuteShoot(bestShooter,bestTarget))return;   // a refusal (should not happen after the TAKE filter) falls through to the move options instead of wedging the turn
   }
 
@@ -3936,7 +3973,7 @@ function tbRunAITurn(seat){
     const u=units[ui];
     const adjEnemy=(adj[u.hex]||[]).some(h=>{const v=unitAt(h);return v&&v.alive&&allyOf(v.team)!==allyOf(u.team);});
     if(adjEnemy){
-      S.sel=ui;
+      _aiSel(ui);
       tbExecuteSpin(ui);
       return;
     }
@@ -3951,7 +3988,7 @@ function tbRunAITurn(seat){
     }
   }
   if(bestMover>=0&&bestPath){
-    S.sel=bestMover;
+    _aiSel(bestMover);
     tbExecuteMove(bestMover,bestPath);
     return;
   }
@@ -3959,7 +3996,7 @@ function tbRunAITurn(seat){
   // 4. If stationary, set suppression on open approach
   const su=myUnits[0];
   if(su>=0&&!units[su].suppressing){
-    S.sel=su;
+    _aiSel(su);
     tbExecuteSuppress(su);
     return;
   }
@@ -4032,8 +4069,10 @@ function tbUpdateIntel(){if(!tb||!S)return;tbIntel={vis:new Map()};for(const g o
     else if(e.tbSeen&&e.tbSeen[g]!=null&&v.has(e.tbSeen[g]))delete e.tbSeen[g];}}   // ghost DISPROVEN: you can see the last-known hex and they're not there -- intel cleared, they slipped away
   tbThreatDirty=true;}
 function tbRayFirstImpact(spec,team,si){if(!spec)return{kind:'clear'};const stop=spec.wall?Math.max(0,Math.min(1,spec.wall.frac)):1,steps=Math.max(2,Math.ceil(spec.lenPx*stop/(HEXR*.2))),seen=new Set();for(let k=1;k<=steps;k++){const f=stop*k/steps,h=hexAtPoint(spec.ox+Math.cos(spec.ang)*spec.lenPx*f,spec.oy+Math.sin(spec.ang)*spec.lenPx*f);if(h<0||h===spec.from||seen.has(h))continue;seen.add(h);const u=unitAt(h);if(u&&u.alive&&units.indexOf(u)!==si&&allyOf(u.team)!==allyOf(team))return{kind:'unit',unit:units.indexOf(u),hex:h};}return spec.wall?{kind:'wall',hex:spec.wall.hex}:{kind:'clear'};}
-function tbTargets(ui){const u=units[ui];if(!u||!u.alive)return[];const out=[];for(let i=0;i<units.length;i++){const e=units[i];if(!e.alive||allyOf(e.team)===allyOf(u.team))continue;if(tbOn()&&tbIntel){const gv=tbIntel.vis.get(allyOf(u.team));if(gv&&!gv.has(e.hex))continue;}const info=coverInfo(u,e.hex,dirToward(u.hex,e.hex));if(info&&info.chance>0)out.push({i,info});}return out;}
-function tbOutcome(si,ti,info){const s=units[si],v=units[ti];if(!s||!v)return null;const spec=lineFireSpec(si,ti,info,null,0,true),impact=tbRayFirstImpact(spec,s.team,si);if(impact.kind==='wall')return{label:'WALL',kill:false,physical:true,precision:1};if(impact.kind==='unit'&&impact.unit===ti)return{label:'TAKE',kill:true,physical:true,precision:1};return{label:'BLOCKED',kill:false,physical:true,precision:1};}   /* three words, all true: TAKE = the ray reaches this piece and the shot fires; WALL = a wall eats it; BLOCKED = something else is in the way (another enemy body soaking the lane, or the lane never truly reaches them). The old third label was 'CLEAR', which told a first-timer the OPPOSITE of "you cannot shoot this". tbExecuteShoot enforces the same ray, so the label and the tap can never disagree. */
+function tbTargets(ui){const u=units[ui];if(!u||!u.alive)return[];const rng=(WEAP[u.type]&&WEAP[u.type].range)||3,out=[];for(let i=0;i<units.length;i++){const e=units[i];if(!e.alive||allyOf(e.team)===allyOf(u.team))continue;if(tbOn()&&tbIntel){const gv=tbIntel.vis.get(allyOf(u.team));if(gv&&!gv.has(e.hex))continue;}if(hexDistance(u.hex,e.hex)>rng)continue;out.push({i,info:{chance:1,precision:1}});}return out;}   /* CHESS CANDIDACY = SEEN + IN RANGE, nothing else (Ian 2026-08-18: "I can clearly see this person in my range, but I can't shoot at them"). The old gate ran the REAL-TIME hit model (coverInfo: cone, muzzle-port exposure, partial-cover fractions), which can score a plainly-rendered enemy at zero -- correct for real-time dice, unreadable in a deterministic mode. Facing never gates a shot because aiming is free and the executor snaps it anyway. The physical ray (tbOutcome) remains the one arbiter of whether the shot completes. */
+function tbOutcome(si,ti,info){const s=units[si],v=units[ti];if(!s||!v)return null;if(!info)info={chance:1,precision:1};
+  const _a=s.aimA;s.aimA=null;const spec=lineFireSpec(si,ti,info,null,0,true);s.aimA=_a;   /* RAY AT THE TARGET, not down the live hand-aim. lineFireSpec's _handAim branch reads s.aimA/focusSource and would trace along wherever this trooper is CURRENTLY pointed -- so with an aimed trooper, every label (and the 279 fire guard) was answering "what does my current aim line hit" instead of "what happens if I tap this enemy". Aiming is free and the executor snaps to the target, so the preview must assume the turn. aimA is stashed/restored synchronously; nothing renders mid-call. */
+  const impact=tbRayFirstImpact(spec,s.team,si);if(impact.kind==='wall')return{label:'WALL',kill:false,physical:true,precision:1};if(impact.kind==='unit'&&impact.unit===ti)return{label:'TAKE',kill:true,physical:true,precision:1};return{label:'BLOCKED',kill:false,physical:true,precision:1};}   /* three words, all true: TAKE = the ray reaches this piece and the shot fires; WALL = a wall eats it; BLOCKED = something else is in the way (another enemy body soaking the lane, or the lane never truly reaches them). The old third label was 'CLEAR', which told a first-timer the OPPOSITE of "you cannot shoot this". tbExecuteShoot enforces the same ray, so the label and the tap can never disagree. */
 function tbPlanTargets(ui){return tbTargets(ui).map(t=>({...t,outcome:tbOutcome(ui,t.i,t.info)}));}
 function tbBestShotFrom(ui,h){const u=units[ui],old=u.hex;u.hex=h;let best=null;for(let i=0;i<units.length;i++){const e=units[i];if(!e.alive||allyOf(e.team)===allyOf(u.team))continue;if(tbIntel){const gv=tbIntel.vis.get(allyOf(u.team));if(gv&&!gv.has(e.hex))continue;}const info=coverInfo(u,e.hex,dirToward(h,e.hex));if(info&&info.chance>0&&(!best||info.chance>best.info.chance))best={i,info};}u.hex=old;return best;}
 function tbAIBestMove(i){
@@ -4114,6 +4153,10 @@ function tbPointerUp(up,wasDraw,path,wasUnit,gestureUnit=-1,sweptAim=false){if(!
     if(_downAlreadySel&&!wasDraw&&tbCanCommand(units[flipUnit])){orderFlip(flipUnit);renderStatus();return;}
     renderStatus();draw();return;
   }
+  if(hu&&hu.alive&&isMyTeam(hu.team)&&!sweptAim&&!wasDraw&&!tbCanCommand(hu)){
+    if(S.sel!==hui){selectUnit(hui);lastEvent=`${WEAP[hu.type].label} — showing its sight lines while ${COLORS[tb.seat].n} moves.`;}
+    renderStatus();draw();return;
+  }   /* INSPECT OFF-TURN (Ian 2026-08-18: "select different troopers when it's not my turn, so I can see what my troopers see"). A plain tap on your own trooper now selects it in ANY seat's turn -- selection drives the cone/peek/lane overlays, so this is the whole feature. Gated to !tbCanCommand so your own turn keeps the existing tap flow untouched, and to plain taps so a route drag or aim sweep ending over a friendly body keeps its old meaning. Selection is local view state; it issues no order and sends nothing in MP. */
   const su=S.sel!=null?units[S.sel]:null;
   if(!su||!tbCanCommand(su)){renderStatus();return;}
   if(hu&&nzCanKick(S.sel,hui)){nzOrderKick(S.sel,hui);return;}
@@ -4617,7 +4660,7 @@ function renderEspn(){const bar=document.getElementById('espnBar');if(!bar||!S)r
 function renderAP(){const host=document.getElementById('apdots');host.innerHTML='';if(!S)return;host.style.display=rt.phase==='combat'?'':'none';const lit=rt.phase==='combat'&&rt.running?tempoMeta().dots:0;   /* tempo dots only mean anything in RT combat -- in TB/setup/regroup they sat unlit and read as a broken turn counter */for(let i=0;i<3;i++){const d=document.createElement('i');if(i<lit&&!S.over)d.className='on';host.appendChild(d);}updatePhaseUI();if(typeof renderEspn==='function')renderEspn();renderTbLog();}   // renderAP runs on the 250ms clock tick, keeping the scoreboard and turn action header live
 /* ===================== TROOPER DOCK — roster chips + cycle (design 1c) ===================== */
 const MARKS={sniper:'SN',rifle:'RF',shotgun:'MG',shield:'SH',burst:'BR'};
-function dockDetail(u){const hp=`${u.hp??u.maxHp}/${u.maxHp||UNIT_HP[u.type]||4}`;if(tbOn()){const mine=tbCanCommand(u),st=tbIsStunned(u)?'STUNNED · misses this turn':(mine?(isFlagCarrier(u)?'your move · carrying — cannot fire':'your move — drag to move · tap ground to aim (free)'):'standing by');return `${hp} HP · ${st}`;}   /* chess truth: it is either this piece's turn or it isn't. The old line counted personal AP nothing ever spent ("1 action" forever) and kept a SIMULATING branch for a resolve phase chess mode does not have. */const st=(u.sprinting?'sprinting':isMoving(u)?'marching':(u.state==='blocked'?'blocked':'holding'))+(rtInContact(units.indexOf(u))?' · in contact':'');
+function dockDetail(u){const hp=`${u.hp??u.maxHp}/${u.maxHp||UNIT_HP[u.type]||4}`;if(tbOn()){const mine=tbCanCommand(u),st=tbIsStunned(u)?'STUNNED · misses this turn':(mine?(isFlagCarrier(u)?'your move · carrying — cannot fire':'your move — drag to move · tap ground to aim (free)'):'waiting — its sight lines are on the board');return `${hp} HP · ${st}`;}   /* chess truth: it is either this piece's turn or it isn't. The old line counted personal AP nothing ever spent ("1 action" forever) and kept a SIMULATING branch for a resolve phase chess mode does not have. */const st=(u.sprinting?'sprinting':isMoving(u)?'marching':(u.state==='blocked'?'blocked':'holding'))+(rtInContact(units.indexOf(u))?' · in contact':'');
   return `${hp} HP · rng ${WEAP[u.type].range} · ${coneDeg(u.type)}° · ${st}`;}   /* the selected chip already shows the class name in bold above, so the detail line drops the redundant label and just lists the stats (Ian: "stat lines are terribly formatted") */
 function revealSelectedDockChip(host){const chip=host&&host.querySelector('.dchip.sel');if(!chip)return;const vertical=getComputedStyle(host).flexDirection==='column',start=vertical?chip.offsetTop:chip.offsetLeft,size=vertical?chip.offsetHeight:chip.offsetWidth,viewStart=vertical?host.scrollTop:host.scrollLeft,viewSize=vertical?host.clientHeight:host.clientWidth;if(start>=viewStart&&start+size<=viewStart+viewSize)return;if(vertical)host.scrollTop=Math.max(0,start-8);else host.scrollLeft=Math.max(0,start-10);}
 function renderDock(){const host=document.getElementById('dock');if(!host)return;
@@ -4818,6 +4861,8 @@ function drawTipArt(dt){const c=document.getElementById('tipArt');if(!c||!_tipAr
 }
 let _tipN=0;try{_tipN=parseInt(localStorage.getItem('hsl_tip')||'0',10)||0;}catch(e){}
 const WHATS_NEW=[
+  'Turn-based overwatch is automatic — every trooper reaction-fires once per round at the first enemy that crosses its sight line.',
+  'Turn-based shots fire your whole trigger pull now — a burst’s ×3 is ×3 on the board, and you can inspect any of your troopers during the enemy’s turn.',
   'Hold a trooper, drag to an action, let go — GUARD, SUPPRESS and HOLD now live on the board, not just the dock.',
   'Snipers punch through armour: one round takes a whole ring plate off and carries into the shard beneath.',
   'The shape sheet can set BOLTS PER PULL (×N) per class, and the 30/60/90 columns now show your second barrel.',
@@ -4844,7 +4889,7 @@ function regroupTipHtml(){if(_rgTip.wave!==rt.wave){_rgTip={wave:rt.wave,html:se
 function currentGuide(){if(!S||S.over||tutorial.active)return null;if(!guideState.dismissed&&rt.phase==='turns'&&tb&&tbActiveInput()){
   const selected=S.sel!=null?units[S.sel]:null;
   if(selected&&tbIsStunned(selected))return{key:'tb-stunned',title:`${WEAP[selected.type].label.toUpperCase()} STUNNED`,text:'Hit from outside its view — this trooper loses this turn and cannot move, fire, or aim. Command another trooper; it recovers next turn.'};
-  if(!guideState.tbAimed&&((tb.round||1)>=3))return{key:'tb-aim',title:'AIM IS FREE',text:'Tap open ground to point a trooper — it never ends your turn. Where a trooper looks decides what it sees, what it can fire at, and what SUPPRESS overwatch intercepts.'};}   /* chess-mode cards only. The old branches taught the retired pool ("∞ LEFT", "Ready when your plan is done") and steered players at NEXT/READY buttons that were removed -- and the first-turn card duplicated the turnPhaseGuide banner, which owns the round 1-2 lesson. What is left is contextual: the stun explains itself when it bites, and the free-aim lesson waits until the banner has left the stage (round 3+) and retires itself the first time the player aims. */
+  if(!guideState.tbAimed&&((tb.round||1)>=3))return{key:'tb-aim',title:'AIM IS FREE',text:'Tap open ground to point a trooper — it never ends your turn. A trooper reaction-fires once per round at the first enemy that crosses its sight line, so your aim is your overwatch.'};}   /* chess-mode cards only. The old branches taught the retired pool ("∞ LEFT", "Ready when your plan is done") and steered players at NEXT/READY buttons that were removed -- and the first-turn card duplicated the turnPhaseGuide banner, which owns the round 1-2 lesson. What is left is contextual: the stun explains itself when it bites, and the free-aim lesson waits until the banner has left the stage (round 3+) and retires itself the first time the player aims. */
   if(rt.phase!=='combat')return null;if(!guideState.dismissed&&!guideState.moved)return{key:'move',title:'1 · MOVE YOUR SQUAD',text:'Drag from one of your troopers and let go where you want it.'};if(!guideState.dismissed&&!guideState.aimed)return{key:'aim',title:'2 · SET THE SIGHT LINE',text:'Tap anywhere away from the selected trooper to point it. The red line is where it watches — and fires, on its own.'};
   const myTeam=humanTeamsAlive().find(isMyTeam);
   if(!guideState.dismissed&&redroverOn()&&rr&&myTeam!=null){   /* ROVER is the mode Ian flagged as confusing with 3+ teams -- spell out your role + destination this round, by name */
@@ -5228,7 +5273,7 @@ function drawWorld(){const vis=visibleHexSet();_lastVis=vis;_selLaneSet=new Set(
     else{ctx.fillStyle='rgba(255,255,255,.05)';ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=2;}
     ctx.fill();ctx.stroke();const lbl=isMove?'MOVE':'';if(lbl){ctx.font='700 9px ui-sans-serif';ctx.textAlign='center';ctx.lineWidth=2.5;ctx.strokeStyle='rgba(3,6,12,.85)';ctx.strokeText(lbl,c.x,c.y-HEXR*.48);ctx.fillStyle=isMove?'#9effc0':'#ffe096';ctx.fillText(lbl,c.x,c.y-HEXR*.48);ctx.textAlign='left';}ctx.restore();}
   if(tbOn()&&S){tbThreatSet();for(const[i,hexes]of tbOwCache){const u=units[i];if(!u||!u.alive||!u.ow)continue;const vg2=tbViewerGroup(),enemy=vg2!=null?allyOf(u.team)!==vg2:allyOf(u.team)!==allyOf(tb.seat),col=enemy?'#ff5656':COLORS[u.team].c;if(!tbMineView(u)&&!vis.has(u.hex))continue;for(const item of hexes){const c=centers[item.hex];hexPath(c.x,c.y,HEXR-9);ctx.strokeStyle=hexA(col,.38*(1-item.edge*.35));ctx.lineWidth=1.3;ctx.stroke();}const uc=unitRenderPos(u);ctx.fillStyle=hexA(col,.95);ctx.font='bold 11px ui-sans-serif';ctx.textAlign='center';ctx.fillText('⊙',uc.x,uc.y-HEXR*.78);ctx.textAlign='left';}
-    if(S.sel!=null&&units[S.sel]){const su=units[S.sel];if(su.alive&&tbCanCommand(su)&&tbUnitCanAct(su)&&tbCanShoot(su))for(const t of tbPlanTargets(S.sel)){const e=units[t.i],c=unitRenderPos(e),oc=t.outcome,live=!!(oc&&oc.kill),lbl=oc?oc.label:'BLOCKED';ctx.save();ctx.strokeStyle=live?'rgba(255,120,120,.95)':'rgba(160,170,185,.5)';ctx.lineWidth=live?2:1.4;ctx.setLineDash([3,3]);ctx.beginPath();ctx.arc(c.x,c.y,HEXR*.8,0,7);ctx.stroke();ctx.setLineDash([]);
+    if(S.sel!=null&&units[S.sel]){const su=units[S.sel];if(su.alive&&tbCanCommand(su)&&tbUnitCanAct(su)&&tbCanShoot(su))for(const t of tbPlanTargets(S.sel)){const e=units[t.i];if(!vis.has(e.hex))continue;/* Battleship vision: never ring an enemy the screen isn't rendering -- squad intel can know about bodies the selected piece's scoped view doesn't draw, and a floating label over empty fog reads as a glitch */const c=unitRenderPos(e),oc=t.outcome,live=!!(oc&&oc.kill),lbl=oc?oc.label:'BLOCKED';ctx.save();ctx.strokeStyle=live?'rgba(255,120,120,.95)':'rgba(160,170,185,.5)';ctx.lineWidth=live?2:1.4;ctx.setLineDash([3,3]);ctx.beginPath();ctx.arc(c.x,c.y,HEXR*.8,0,7);ctx.stroke();ctx.setLineDash([]);
         ctx.font='bold 11px ui-sans-serif';ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='rgba(3,6,12,.9)';ctx.strokeText(lbl,c.x,c.y-HEXR*1.02);ctx.fillStyle=live?'#8ef05e':'#9aa5b5';ctx.fillText(lbl,c.x,c.y-HEXR*1.02);ctx.textAlign='left';ctx.restore();}}}   /* two states, both actionable: green TAKE on a red ring = tap fires and the shot lands; grey WALL/BLOCKED on a grey ring = the lane is sealed and a tap will explain, not fire. The old scheme drew every ringed enemy in "shootable" red and included a pale-red tier for shots that no longer exist. */   // sealed lanes render as thin cone outlines (red = enemy) with a ⊙ over each watcher
   drawCohesionLinks(vis);
   drawPlanGhosts();
