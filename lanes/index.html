@@ -1069,7 +1069,7 @@ function saveMuted(){try{localStorage.setItem('hsl_muted',AUDIO_MUTED?'1':'0');}
 let PRO=false;try{PRO=localStorage.getItem('hsl_pro')==='1';}catch(e){}
 function isPro(){return true;}
 function setPro(v){PRO=!!v;try{localStorage.setItem('hsl_pro',v?'1':'0');}catch(e){}}
-const BUILD_ID='286';   /* ⚠ BUMP THIS EVERY SHIP, in the same edit as CURRENT_PROJECT_VERSION / CFBundleVersion. It is the ONLY thing that lets two players discover they are on different builds. Multiplayer is host-authoritative for the SIM, but every client still computes fog, exposure rays and all drawing LOCALLY from shared geometry code -- so any build that changes vision or rendering (e.g. 174's muzzle-centring, which moved targetExposureInfo's ray origin) makes a mismatched guest see a genuinely different board from the host. Reported 2026-08-03 by a player on an older app build: "my guys are flickering and I can't see your guys at all, it looks like bullets are coming from nowhere" -- three symptoms, one cause, and nothing in the game said a word about it. This is a WARNING, never a block: it names both builds and lets them play on, because refusing the connection over a UI-only difference would be worse than a cosmetic desync. */
+const BUILD_ID='287';   /* ⚠ BUMP THIS EVERY SHIP, in the same edit as CURRENT_PROJECT_VERSION / CFBundleVersion. It is the ONLY thing that lets two players discover they are on different builds. Multiplayer is host-authoritative for the SIM, but every client still computes fog, exposure rays and all drawing LOCALLY from shared geometry code -- so any build that changes vision or rendering (e.g. 174's muzzle-centring, which moved targetExposureInfo's ray origin) makes a mismatched guest see a genuinely different board from the host. Reported 2026-08-03 by a player on an older app build: "my guys are flickering and I can't see your guys at all, it looks like bullets are coming from nowhere" -- three symptoms, one cause, and nothing in the game said a word about it. This is a WARNING, never a block: it names both builds and lets them play on, because refusing the connection over a UI-only difference would be worse than a cosmetic desync. */
 const DEV_IAP_STUB=false;   /* SHIP VALUE. RevenueCat is wired (see purchasePro/restorePro below), so real purchases route through the store. Leave FALSE for any App Store / TestFlight build -- true would hand out Pro for free on a non-native context or a failed RC init. Flip to true only for a throwaway local unlock test. */
 const DEV_TOOLS=false;   /* SHIP VALUE. Gates the in-app "Pro: ON/OFF" dev toggle in the experiments panel -- a free-unlock backdoor that must NOT ship. Set true locally to test the locked-vs-unlocked gating without a sandbox purchase. */
 const DEV_SHAPE_SHEET_SHORTCUT=true;   /* SHIP PREP: set false before any App Store submission. The centered editor remains available through EXP.shapeSheet; this temporary battle shortcut is only for direct ports tuning. */
@@ -2431,7 +2431,7 @@ function checkFlag(){if(settings.objective!=='ctf'||!flag)return;if(flag.carrier
 function raidCarrying(ui){return raid?(raid.tokens.find(tk=>tk.carrier===ui)||null):null;}
 function raidAllyBanked(team){const out=new Set();if(!raid||!S)return out;for(let t=0;t<S.players;t++){if(allyOf(t)!==allyOf(team))continue;for(const h of (raid.banked[t]||[]))out.add(h);}return out;}   /* THE RAID LEDGER IS THE SIDE'S, NOT THE TEAM'S (Ian 2026-08-13, 2v2v2: "I've captured three, and now my teammate is capturing one of the ones I've already caught"). raidNeed always counted ENEMY-ALLIANCE flags, so the intended win was "your side banks one of each" -- but every read of raid.banked[] was per-team, so a partner's banks counted for nothing: the win demanded one team solo all four, the steal gate let allies re-grab flags their side already held, and the AI targeted them too. Storage stays per-team (mpSnap shape, espn per-pod sums, banker credit all unchanged); every RULE read goes through this union. */
 function raidRespawnTick(dt){if(!raid||!S||S.over)return;for(let i=0;i<units.length;i++){const u=units[i];if(u.alive||u.horde)continue;
-  if(tbOn()){u.respTurns=u.respTurns??Math.max(1,Math.round(TUNE.tbRaidRespawn??4));if(u.respTurns>0)continue;u.respTurns=null;u.respMs=null;}   /* TURN-BASED COUNTS TURNS, NOT SECONDS (Ian 2026-07-31: "the respawn rate is 20 seconds in teleport, but in turn-based I feel like it was two turns, which should be much more than that ... four or five turns"). Ticking the real-time clock between turns made the death penalty however long the players happened to dawdle -- a fast table got a trooper back in two turns, a slow one in one. The counter is decremented once for every simultaneous round in tbSimBeginPlanning, so "4 turns" means the same thing at any team count. Initialised lazily here, which is safe ONLY because this tick runs every frame in both TB paths -- a trooper is stamped within a frame of dying, long before its side's round ends, so it never loses a turn to the round boundary. */
+  if(tbOn()){u.respTurns=u.respTurns??Math.max(1,Math.round(TUNE.tbRaidRespawn??4));if(u.respTurns>0)continue;u.respTurns=null;u.respMs=null;}   /* TURN-BASED COUNTS TURNS, NOT SECONDS (Ian 2026-07-31: "the respawn rate is 20 seconds in teleport, but in turn-based I feel like it was two turns, which should be much more than that ... four or five turns"). Ticking the real-time clock between turns made the death penalty however long the players happened to dawdle -- a fast table got a trooper back in two turns, a slow one in one. The counter is decremented once per the dead trooper's own team's turn, in tbBeginTurn (2026-08-20 fix: this used to point at tbSimBeginPlanning, which the build-258 chess rework deleted without moving the decrement anywhere -- respTurns was stamped on death and never ticked down, so TB Raid respawn was permanently broken until this note was corrected). Initialised lazily here, which is safe ONLY because this tick runs every frame in both TB paths -- a trooper is stamped within a frame of dying, long before its side's round ends, so it never loses a turn to the round boundary. */
   else{u.respMs=(u.respMs??Math.min(30000,RAID_RESPAWN_S*1000+((rt.wave||1)-1)*1500))-dt;if(u.respMs>0)continue;u.respMs=null;}   /* Raid death penalty is permanently 25s, still +1.5s per wave with the existing 30s cap: dying costs real time off the flag race */
   /* RESPAWN IN YOUR OWN DEPLOY ZONE (Ian 2026-07-19: "the raid moshpit where the respawn is in the center and everyone just gets
      stuck is dumb"). This REVERSES the 2026-07-16 centre-respawn: dropping every dead trooper from every team onto the same few
@@ -3589,7 +3589,7 @@ function groupMove(th){if(!S||!S.selGroup)return;const g=S.selGroup.filter(i=>un
    same way. Coverage on arrival is no longer this function's job either -- coverLanes fans the whole squad continuously, which is what fanGroupCover only
    ever did once, at the end of a move. */
 /* ===================== BOARD INPUT — ONE RULE: DRAG MOVES, TAP DOES EVERYTHING ELSE (Ian 2026-08-07). A move = press began on your own trooper and released on a different legal hex, whether the finger traced a route or barely left the hex. TAP a trooper = select / flip; TAP an object (adjacent wall, encroacher, TB target) = act on it; TAP anywhere else = aim. One gesture grammar for finger, Apple Pencil, and Mac trackpad/mouse (all pointer events). ===================== */
-function findEnemyAtPoint(p,myTeam){if(!p||myTeam==null)return -1;let best=-1,bestD=HEXR*1.65;for(let i=0;i<units.length;i++){const u=units[i];if(!u||!u.alive||allyOf(u.team)===allyOf(myTeam))continue;const c=unitRenderPos(u);if(!c)continue;const d=Math.hypot(p.x-c.x,p.y-c.y);if(d<bestD){bestD=d;best=i;}}if(best<0){const h=nearestHexWithin(p.x,p.y,HEXR*1.3);if(h>=0){const u=unitAt(h);if(u&&u.alive&&allyOf(u.team)!==allyOf(myTeam))best=units.indexOf(u);}}return best;}
+function findEnemyAtPoint(p,myTeam,requireVis){if(!p||myTeam==null)return -1;let best=-1,bestD=HEXR*1.65;for(let i=0;i<units.length;i++){const u=units[i];if(!u||!u.alive||allyOf(u.team)===allyOf(myTeam)||(requireVis&&!u._vis))continue;const c=unitRenderPos(u);if(!c)continue;const d=Math.hypot(p.x-c.x,p.y-c.y);if(d<bestD){bestD=d;best=i;}}if(best<0){const h=nearestHexWithin(p.x,p.y,HEXR*1.3);if(h>=0){const u=unitAt(h);if(u&&u.alive&&allyOf(u.team)!==allyOf(myTeam)&&(!requireVis||u._vis))best=units.indexOf(u);}}return best;}   /* requireVis (TB only, see tbPointerUp): a fogged unit sitting nearer to the tap than the VISIBLE one the player meant to hit would otherwise win on raw proximity and misfire "no eyes on target" against a plainly visible enemy -- skip it at the source instead of only rejecting after the wrong unit is already picked. Third arg defaults falsy so the pointerdown call at down= (real-time + TB press highlight) is untouched. */
 let _downAlreadySel=false,_downKickIdx=-1,_downGroup=null,_downEnemyIdx=-1;
 
 function boardMovePath(ui,dest){const u=units[ui];if(!u||dest==null||dest<0||dest===u.hex||!cells[dest]||cells[dest].wall||fallenRing(dest))return null;
@@ -3802,6 +3802,7 @@ function tbBeginTurn(seat){
   tb.seat=seat;tb.phase='active';tb.busy=false;S.current=seat;stagedMoveHex=-1;
   units.forEach(u=>{if(u&&u.team===seat){u.tbMovedTurn=false;u.tbAp=1;u.tbActivated=false;
     if((u.spawnProtTurns||0)>0)u.spawnProtTurns--;
+    if(!u.alive&&(u.respTurns||0)>0)u.respTurns--;   /* Raid TB respawn was permanently stuck: this counter was set in raidRespawnTick but never decremented anywhere after the build-258 chess rework dropped tbSimBeginPlanning, which used to do it. Mirrors spawnProtTurns above -- ticks once per the dead trooper's own team's turn. */
     if((u.tbWarpLock||0)>0){u.tbWarpLockedThisTurn=true;u.tbWarpLock--;}else u.tbWarpLockedThisTurn=false;
     if((u.tbStunTurns||0)>0){u.tbStunTurns--;u.tbStunnedThisTurn=true;u.tbAp=0;u.state='stunned';if(u.alive)tbLogAction(u,'stunned — misses this turn',0,'turn lost');}
     else{u.tbStunnedThisTurn=false;if(u.state==='stunned')u.state='hold';}}});
@@ -4248,13 +4249,16 @@ function tbAIBestMove(i){
 function tbPointerUp(up,wasDraw,path,wasUnit,gestureUnit=-1,sweptAim=false){if(!tb||tb.busy||!S||S.over)return;
   const activeUnit=(gestureUnit>=0&&units[gestureUnit])?gestureUnit:S.sel;
   const h=nearestHexWithin(up.x,up.y,HEXR);
-  const targetEnemy=(activeUnit!=null&&units[activeUnit])?findEnemyAtPoint(up,units[activeUnit].team):-1;
-  const hu=targetEnemy>=0?units[targetEnemy]:(h>=0?unitAt(h):null),hui=hu?units.indexOf(hu):-1;
+  const targetEnemy=(activeUnit!=null&&units[activeUnit])?findEnemyAtPoint(up,units[activeUnit].team,true):-1;
+  const _rawHu=h>=0?unitAt(h):null;
+  const hu=targetEnemy>=0?units[targetEnemy]:(_rawHu&&_rawHu._vis?_rawHu:null),hui=hu?units.indexOf(hu):-1;   /* a fogged unit on the tapped hex must read as nothing tapped, not as a rejected target -- a distinct "no eyes on that hex" message here would let a player probe blank ground and map invisible enemy positions by which taps say something different (the exact defect shape the wall-flash fog gate above exists to prevent). Own units are unaffected: tbMineView bypasses the fog gate entirely, so they are always _vis. */
   if(tutorialHandlePointer({h,hui,wasDraw,path,wasUnit,activeUnit}))return;
   if(hu&&activeUnit!=null&&units[activeUnit]&&allyOf(hu.team)!==allyOf(units[activeUnit].team)&&tbCanCommand(units[activeUnit])){
     stagedMoveHex=-1;
     if(nzCanKick(activeUnit,hui)){nzOrderKick(activeUnit,hui);return;}
-    tbExecuteShoot(activeUnit,hui);return;
+    const _shTB=units[activeUnit];   /* hu is only ever set here when it is a currently-visible enemy (see the hu computation above) -- an unseen enemy falls through silently instead of reaching this block at all, so there is nothing left to check but this shooter's own geometry */
+    if(coverageInfo(_shTB,hu.hex,dirToward(_shTB.hex,hu.hex))){tbExecuteShoot(activeUnit,hui);return;}
+    lastEvent="No clean line of fire from here.";renderStatus();draw();return;
   }
   if(wasUnit&&activeUnit!=null&&units[activeUnit]&&units[activeUnit].team===tb.seat&&isHumanTeam(tb.seat)){
     const uHex=units[activeUnit].hex;
@@ -4295,9 +4299,10 @@ function tbPointerUp(up,wasDraw,path,wasUnit,gestureUnit=-1,sweptAim=false){if(!
     renderStatus();return;
   }
   if(hu&&nzCanKick(S.sel,hui)){stagedMoveHex=-1;nzOrderKick(S.sel,hui);return;}
-  if(hu&&allyOf(hu.team)!==allyOf(su.team)&&_tbKnown(su,hu)){
+  if(hu&&allyOf(hu.team)!==allyOf(su.team)){   /* hu is only ever set here when it is a currently-visible enemy -- see the hu computation above */
     stagedMoveHex=-1;
-    tbExecuteShoot(S.sel,hui);return;
+    if(coverageInfo(su,hu.hex,dirToward(su.hex,hu.hex))){tbExecuteShoot(S.sel,hui);return;}
+    lastEvent="No clean line of fire from here.";renderStatus();draw();return;
   }
   if(h>=0&&cells[h]&&cells[h].wall&&adj[su.hex]&&adj[su.hex].includes(h)&&!cells[h].hard){
     stagedMoveHex=-1;
