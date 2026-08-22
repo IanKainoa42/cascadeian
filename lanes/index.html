@@ -1065,7 +1065,7 @@ function saveMuted(){try{localStorage.setItem('hsl_muted',AUDIO_MUTED?'1':'0');}
 let PRO=false;try{PRO=localStorage.getItem('hsl_pro')==='1';}catch(e){}
 function isPro(){return true;}
 function setPro(v){PRO=!!v;try{localStorage.setItem('hsl_pro',v?'1':'0');}catch(e){}}
-const BUILD_ID='293';   /* ⚠ BUMP THIS EVERY SHIP, in the same edit as CURRENT_PROJECT_VERSION / CFBundleVersion. It is the ONLY thing that lets two players discover they are on different builds. Multiplayer is host-authoritative for the SIM, but every client still computes fog, exposure rays and all drawing LOCALLY from shared geometry code -- so any build that changes vision or rendering (e.g. 174's muzzle-centring, which moved targetExposureInfo's ray origin) makes a mismatched guest see a genuinely different board from the host. Reported 2026-08-03 by a player on an older app build: "my guys are flickering and I can't see your guys at all, it looks like bullets are coming from nowhere" -- three symptoms, one cause, and nothing in the game said a word about it. This is a WARNING, never a block: it names both builds and lets them play on, because refusing the connection over a UI-only difference would be worse than a cosmetic desync. */
+const BUILD_ID='294';   /* ⚠ BUMP THIS EVERY SHIP, in the same edit as CURRENT_PROJECT_VERSION / CFBundleVersion. It is the ONLY thing that lets two players discover they are on different builds. Multiplayer is host-authoritative for the SIM, but every client still computes fog, exposure rays and all drawing LOCALLY from shared geometry code -- so any build that changes vision or rendering (e.g. 174's muzzle-centring, which moved targetExposureInfo's ray origin) makes a mismatched guest see a genuinely different board from the host. Reported 2026-08-03 by a player on an older app build: "my guys are flickering and I can't see your guys at all, it looks like bullets are coming from nowhere" -- three symptoms, one cause, and nothing in the game said a word about it. This is a WARNING, never a block: it names both builds and lets them play on, because refusing the connection over a UI-only difference would be worse than a cosmetic desync. */
 const DEV_IAP_STUB=false;   /* SHIP VALUE. RevenueCat is wired (see purchasePro/restorePro below), so real purchases route through the store. Leave FALSE for any App Store / TestFlight build -- true would hand out Pro for free on a non-native context or a failed RC init. Flip to true only for a throwaway local unlock test. */
 const DEV_TOOLS=false;   /* SHIP VALUE. Gates the in-app "Pro: ON/OFF" dev toggle in the experiments panel -- a free-unlock backdoor that must NOT ship. Set true locally to test the locked-vs-unlocked gating without a sandbox purchase. */
 const DEV_SHAPE_SHEET_SHORTCUT=false;   /* SET FALSE 2026-08-21 -- it was still true and the PORTS chip was shipping to TestFlight, showing up on Ian's phone in a live online match as one more button crowding the board. SHIP PREP: keep it false before any App Store submission. The centered editor remains available through EXP.shapeSheet; this temporary battle shortcut is only for direct ports tuning. */
@@ -1160,7 +1160,8 @@ const WALL_SHARD_HP=4,WALL_SHARDS=12;
 function wallCoreHp(){return Math.max(1,WALL_HP-WALL_SHARDS*WALL_SHARD_HP);}   /* 90 - 48 = 42. Derived, never typed: change WALL_HP and the core absorbs the difference while the shards stay even. */
 const WALL_CORE_R=.5,WALL_HIT_R=.95;   /* core radius and shell radius as fractions of HEXR -- WALL_HIT_R matches BODY_HIT_R's intent: the round collides with the drawing, so "it touched the edge of a shard" and "it hit" are the same statement */
 function wallShardAt(ang){const d=((ang*180/Math.PI+60)%360+360)%360;return (d/30)|0;}   /* which of the 12 rim wedges a WORLD BEARING falls in. Wedge t spans subRimPt t..t+1 = [30t-60, 30t-30] degrees -- the same -60 anchor every hex angle in this file uses (flat-top board). NOT a DIRS index and NOT a u.facing: this is rim-facet space, see the four-angle-spaces trap. */
-function wallShardsInit(c){c.wsh=new Array(WALL_SHARDS).fill(WALL_SHARD_HP);c.wcore=wallCoreHp();c.wbrk=0;c.wchip=null;c.wcoreChip=0;_wallArtGen++;}   /* wbrk is a cached bitmask of BROKEN shards so the hot ray path can early-out on an untouched wall without touching the array */
+function wallShardsInit(c){c.wsh=new Array(WALL_SHARDS).fill(WALL_SHARD_HP);c.wcore=wallCoreHp();c.wbrk=0;c.wchip=null;c.wcoreChip=0;c.wgen=(c.wgen|0)+1;_wallArtGen++;}
+function wallTouch(c){c.wgen=(c.wgen|0)+1;_wallArtGen++;}   /* THIS wall's geometry changed. Per-wall so the renderer rebuilds one barrier instead of all of them. */   /* wbrk is a cached bitmask of BROKEN shards so the hot ray path can early-out on an untouched wall without touching the array */
 function wallShardLive(c,k){return !!(c&&c.wsh)&&c.wsh[((k%WALL_SHARDS)+WALL_SHARDS)%WALL_SHARDS]>0;}
 function wallPackLo(c){if(!c.wall||!c.wsh)return 0;let v=0;for(let k=0;k<6;k++)v|=Math.max(0,Math.min(15,c.wsh[k]|0))<<(k*4);return v;}
 function wallPackHi(c){if(!c.wall||!c.wsh)return 0;let v=0;for(let k=0;k<6;k++)v|=Math.max(0,Math.min(15,c.wsh[k+6]|0))<<(k*4);return v;}   /* THE SHARD LEDGER ON THE WIRE: 12 shards x 4 bits = 48, split across two 24-bit ints because JS bitwise is 32-bit. Two plain numbers per cell, never an array and never Infinity -- BinaryPack dies silently on the latter. */
@@ -1169,11 +1170,11 @@ function wallUnpack(c,lo,hi,core){if(!c.wall){c.wsh=null;c.wcore=0;c.wbrk=0;retu
   c.wsh=new Array(WALL_SHARDS);let m=0;
   for(let k=0;k<6;k++){c.wsh[k]=(lo>>(k*4))&15;c.wsh[k+6]=(hi>>(k*4))&15;}
   for(let k=0;k<WALL_SHARDS;k++)if(c.wsh[k]<=0)m|=1<<k;
-  c.wbrk=m;c.wcore=core|0;_wallArtGen++;}   /* mpApply rebuilds every cell object from the snapshot, so the guest's cached barrier geometry has to fall with them */
+  c.wbrk=m;c.wcore=core|0;wallTouch(c);}   /* mpApply rebuilds every cell object from the snapshot, so the guest's cached barrier geometry has to fall with them */
 function wallSigWire(a){if(!a[0])return 0;let m=0;const lo=a[4]|0,hi=a[5]|0;for(let k=0;k<6;k++){if(((lo>>(k*4))&15)<=0)m|=1<<k;if(((hi>>(k*4))&15)<=0)m|=1<<(k+6);}return m*2+(((a[6]|0)>0)?1:0);}
 function wallSigCell(c){return c.wall?((c.wbrk|0)*2+(((c.wcore|0)>0)?1:0)):0;}   /* what a guest must invalidate its LOS memos on: which shards are GONE and whether the core still stands. Deliberately blind to chip damage -- a shard losing 1 of 4 changes no sightline, and bumping _wallGen at 11Hz would defeat the cache entirely. */
 function wallStateOf(h){const c=cells[h];if(!c||!c.wall)return null;return{wsh:c.wsh?c.wsh.slice():null,wcore:c.wcore|0,wbrk:c.wbrk|0,dmg:c.dmg|0};}   /* A SHOVED BARRIER KEEPS ITS SCARS -- captured before clearWall, reapplied after setWall on the destination, so pushing a half-wrecked wall one hex does not hand you back a fresh one */
-function wallStateApply(h,st){const c=cells[h];if(!c||!c.wall)return;if(!st||!st.wsh){wallShardsInit(c);return;}c.wsh=st.wsh.slice();c.wcore=st.wcore;c.wbrk=st.wbrk;c.dmg=st.dmg;c.wchip=null;c.wcoreChip=0;_wallArtGen++;}
+function wallStateApply(h,st){const c=cells[h];if(!c||!c.wall)return;if(!st||!st.wsh){wallShardsInit(c);return;}c.wsh=st.wsh.slice();c.wcore=st.wcore;c.wbrk=st.wbrk;c.dmg=st.dmg;c.wchip=null;c.wcoreChip=0;wallTouch(c);}
 function wallHpLeft(h){const c=cells[h];if(!c||!c.wall)return 0;if(!c.wsh)return WALL_HP;let n=c.wcore|0;for(let k=0;k<WALL_SHARDS;k++)n+=c.wsh[k];return n;}
 function wallEntryExit(h,ax,ay,ux,uy){const c=cells[h],ctr=centers[h];if(!c||!ctr)return null;   /* ray vs the shell circle: t1 = where the round enters, t2 = where it leaves. Same analytic form the body-collision sweep uses, so a wall and a trooper are hit by the same geometry. */
   const ex=ax-ctr.x,ey=ay-ctr.y,R=HEXR*WALL_HIT_R,b=ex*ux+ey*uy,cc=ex*ex+ey*ey-R*R,disc=b*b-cc;
@@ -1192,18 +1193,25 @@ function wallFaceIntact(wh,toward){const c=cells[wh];if(!c||!c.wall)return 0;if(
 function wallWedgePath(P,c,t,Rin,Rout){const a1=subRimPt(Rout,t),a2=subRimPt(Rout,t+1),b2=subRimPt(Rin,t+1),b1=subRimPt(Rin,t);   /* ONE shard: the band between the core and the rim across wedge t. subRimPt at both radii means the outer edge traces the real hex outline (corner, edge-mid, corner) and the inner edge is that same hex scaled down -- the shards nest instead of fanning. */
   P.moveTo(c.x+a1.x,c.y+a1.y);P.lineTo(c.x+a2.x,c.y+a2.y);P.lineTo(c.x+b2.x,c.y+b2.y);P.lineTo(c.x+b1.x,c.y+b1.y);P.closePath();}
 function wallCorePath(P,c,R){for(let k=0;k<WALL_SHARDS;k++){const p=subRimPt(R,k);k?P.lineTo(c.x+p.x,c.y+p.y):P.moveTo(c.x+p.x,c.y+p.y);}P.closePath();}
+function wallCellArt(cc,c,Rin,Rout){const k=(cc.wgen|0)+'|'+Rin+'|'+Rout;if(cc._wa&&cc._wa.k===k)return cc._wa;   /* ONE WALL'S GEOMETRY, cached against that wall's own generation. Rebuilding a single wall is 0.0017ms against 1.47ms for the whole board, and a shard breaking only ever changes ONE wall -- rebuilding all 65 for it was costing ~23ms a frame on device in a firefight. */
+  const ring=new Path2D(),core=new Path2D(),hollow=new Path2D(),rim=new Path2D(),chipped=[],cored=[];
+  for(let j=0;j<WALL_SHARDS;j++){const p=subRimPt(Rout,j);j?rim.lineTo(c.x+p.x,c.y+p.y):rim.moveTo(c.x+p.x,c.y+p.y);}rim.closePath();   /* THE WALL'S OWN SILHOUETTE, one light outline for the whole hex -- what makes it read as a barrier from across the board, exactly as the old slab did */
+  if((cc.wcore|0)>0){wallCorePath(core,c,Rin);
+    if((cc.wcore|0)<wallCoreHp()){const p=new Path2D();wallCorePath(p,c,Rin);cored.push({c,p,hp:cc.wcore|0,chip:cc.wcoreChip||0});}}
+  else wallCorePath(hollow,c,Rin);
+  for(let t=0;t<WALL_SHARDS;t++){const hp=cc.wsh[t]|0;if(hp<=0)continue;   /* a broken shard is drawn as nothing at all -- the absence IS the tell */
+    if(hp>=WALL_SHARD_HP)wallWedgePath(ring,c,t,Rin,Rout);
+    else{const p=new Path2D();wallWedgePath(p,c,t,Rin,Rout);chipped.push({c,t,p,hp,chip:cc.wchip?cc.wchip[t]:0});}}
+  return(cc._wa={k,ring,core,hollow,rim,chipped,cored});}
 function wallArt(Rin,Rout){const mkKey=()=>_wallGen+'|'+_wallArtGen+'|'+Rin+'|'+Rout+'|'+cells.length+'|'+(rt.shrink||0);
-  if(_wallArt&&_wallArt.key===mkKey())return _wallArt;   /* THE WHOLE BARRIER PASS, BUILT ONCE PER CHANGE. Measured: constructing this is 1.45ms for 62 walls and painting it is ~0.001ms, so rebuilding per frame was 100% of the cost and cached it is ~0. Key covers wall layout (_wallGen), chip damage (_wallArtGen), zoom/layout (Rin/Rout) and the ring cascade (rt.shrink, which changes which hexes are still on the board). */
+  if(_wallArt&&_wallArt.key===mkKey())return _wallArt;   /* THE WHOLE BARRIER PASS. Unchanged frames cost nothing; a changed frame now recombines CACHED per-wall paths with addPath (0.013ms for 65 walls) instead of reconstructing 744 quads (1.47ms). */
   const ring=new Path2D(),core=new Path2D(),hollow=new Path2D(),rim=new Path2D(),chipped=[],cored=[];
   for(let i=0;i<cells.length;i++){const cc=cells[i];if(!cc.wall||cc.hard||warnRing(i)||fallenRing(i))continue;const c=centers[i];if(!c)continue;
     if(!cc.wsh)wallShardsInit(cc);
-    for(let k=0;k<WALL_SHARDS;k++){const p=subRimPt(Rout,k);k?rim.lineTo(c.x+p.x,c.y+p.y):rim.moveTo(c.x+p.x,c.y+p.y);}rim.closePath();   /* THE WALL'S OWN SILHOUETTE, one light outline for the whole hex -- what makes it read as a barrier from across the board, exactly as the old slab did */
-    if((cc.wcore|0)>0){wallCorePath(core,c,Rin);
-      if((cc.wcore|0)<wallCoreHp()){const p=new Path2D();wallCorePath(p,c,Rin);cored.push({c,p,hp:cc.wcore|0,chip:cc.wcoreChip||0});}}
-    else wallCorePath(hollow,c,Rin);
-    for(let t=0;t<WALL_SHARDS;t++){const hp=cc.wsh[t]|0;if(hp<=0)continue;   /* a broken shard is drawn as nothing at all -- the absence IS the tell */
-      if(hp>=WALL_SHARD_HP)wallWedgePath(ring,c,t,Rin,Rout);
-      else{const p=new Path2D();wallWedgePath(p,c,t,Rin,Rout);chipped.push({c,t,p,hp,chip:cc.wchip?cc.wchip[t]:0});}}}
+    const a=wallCellArt(cc,c,Rin,Rout);
+    ring.addPath(a.ring);core.addPath(a.core);hollow.addPath(a.hollow);rim.addPath(a.rim);
+    if(a.chipped.length)for(const d of a.chipped)chipped.push(d);
+    if(a.cored.length)for(const d of a.cored)cored.push(d);}
   return(_wallArt={key:mkKey(),ring,core,hollow,rim,chipped,cored});}   /* the key is taken AFTER the loop, not before it: the loop itself calls wallShardsInit on any wall that has no ledger yet, and that bumps _wallArtGen -- storing the entry-time key meant the very first build was filed under a generation that no longer existed, so it rebuilt again the next frame for nothing */   /* HOW MUCH WALL IS STILL FACING YOU, 0..1: half the value is the two shards on your edge, half is the core behind them. A stripped face still reads .5 because the core is there; a fully gutted wall reads 0 and stops bracing entirely. */
 let BODYPAT={};try{const _bp=localStorage.getItem('hsl_bodypat');if(_bp)BODYPAT=JSON.parse(_bp)||{};}catch(e){}   /* hand-edited 24-shard silhouettes from the shape sheet: BODYPAT['rifle|s']={relOffset:mask} (1=outer rim piece, 2=inner core piece), offsets relative to the facing facet. 's' = facing out a side, 'c' = out a corner */
 function saveBodyPat(){try{localStorage.setItem('hsl_bodypat',JSON.stringify(BODYPAT));}catch(e){}}
@@ -2906,11 +2914,13 @@ function lineFireAt(si,ti,info,delay=0,mz=null,sp=0){const s=units[si];if(!s||!s
 function wallCheckCollapse(h){const c=cells[h];if(!c||!c.wall)return false;if((c.wcore|0)>0)return false;if(c.wsh&&c.wsh.some(v=>v>0))return false;
   clearWall(h);fx.push({hex:h,t:gnow(),col:'#ffffff',big:true});lastEvent='A barrier crumbles under sustained fire!';refreshReach();return true;}   /* nothing left to hold the hex: core gone AND every shard gone */
 function wallShardDamage(h,k,amt){const c=cells[h];if(!c||!c.wsh)return false;k=((k%WALL_SHARDS)+WALL_SHARDS)%WALL_SHARDS;if(c.wsh[k]<=0)return false;
-  const a=Math.max(1,amt||1);c.wsh[k]=Math.max(0,c.wsh[k]-a);c.dmg=(c.dmg||0)+a;c.wchip||(c.wchip=new Array(WALL_SHARDS).fill(0));c.wchip[k]=gnow();_bgDirty=true;_wallArtGen++;fx.push({hex:h,t:gnow(),col:'#cfd8ef'});
-  if(c.wsh[k]<=0){c.wbrk|=1<<k;_wallGen++;fx.push({hex:h,t:gnow(),col:'#e8eeff'});wallCheckCollapse(h);}   /* _wallGen ONLY on a break, never on a chip -- it invalidates every LOS/lane memo on the board, and a shard losing 1 of 4 changed no sightline */
+  const a=Math.max(1,amt||1),wasOpaque=!(c.wbrk|0);c.wsh[k]=Math.max(0,c.wsh[k]-a);c.dmg=(c.dmg||0)+a;c.wchip||(c.wchip=new Array(WALL_SHARDS).fill(0));c.wchip[k]=gnow();_bgDirty=true;wallTouch(c);fx.push({hex:h,t:gnow(),col:'#cfd8ef'});
+  if(c.wsh[k]<=0){c.wbrk|=1<<k;
+    if(wasOpaque)_wallGen++;   /* ONLY THE FIRST HOLE IN A WALL BUMPS _wallGen. That counter invalidates every LOS, lane, fog and peek memo on the BOARD, and bumping it per shard was costing +14.7ms of sim and +23ms of draw a frame in a firefight (Ian's device: SIM 78ms, DRAW 36ms, 7fps). A wall goes from certainly-opaque to possibly-passable exactly once -- the first break. Every later break only widens an opening the memos already know about, and all three memos self-refresh anyway (laneHexes and peek on a 180ms bucket, spotClarity on a 300ms TTL), so the finer change lands within a frame or two instead of costing a full board-wide recompute each time. */
+    fx.push({hex:h,t:gnow(),col:'#e8eeff'});wallCheckCollapse(h);}
   return true;}   /* true = the round was absorbed here */
 function wallCoreDamage(h,amt){const c=cells[h];if(!c||(c.wcore|0)<=0)return false;
-  const a=Math.max(1,amt||1);c.wcore=Math.max(0,c.wcore-a);c.dmg=(c.dmg||0)+a;c.wcoreChip=gnow();_bgDirty=true;_wallArtGen++;fx.push({hex:h,t:gnow(),col:'#cfd8ef'});
+  const a=Math.max(1,amt||1);c.wcore=Math.max(0,c.wcore-a);c.dmg=(c.dmg||0)+a;c.wcoreChip=gnow();_bgDirty=true;wallTouch(c);fx.push({hex:h,t:gnow(),col:'#cfd8ef'});
   if(c.wcore<=0){_wallGen++;fx.push({hex:h,t:gnow(),col:'#ffffff',big:true});if(!wallCheckCollapse(h))lastEvent='A barrier core caves in — the hollow is open.';}   /* THE CORE GOES ALTOGETHER (Ian): it is one solid unit, never chipped into pieces like the ring */
   return true;}
 function wallHit(h,ax,ay,ux,uy,amt){const c=cells[h];if(!c||!c.wall)return false;if(!c.wsh)wallShardsInit(c);
