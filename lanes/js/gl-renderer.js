@@ -130,17 +130,33 @@ Gradient.prototype.at = function(t){
    is what pulls more field into view.                                            */
 const VS = `
 attribute vec2 aPos; attribute vec4 aCol;
-uniform vec2 uRes; uniform float uK, uFlat, uDR;
+uniform vec2 uRes; uniform float uK, uFlat, uDR, uCorner;
 varying vec4 vCol; varying vec2 vPos;
 void main(){
   vec2 p = aPos;
   if(uK > 0.0){
+    /* ROUNDED-RECTANGLE FIELD -- must stay identical to lensRectField() in the page, which xy() and
+       glWarpPt() also read. The flat pane is a rounded rect with the SCREEN'S proportions; outside it
+       the geometry is pulled IN along that shape's outward normal, so every edge bends into its own
+       horizon instead of everything being dragged toward one point. Radial before, and a disc inside
+       a 2.4:1 frame reaches the sides long before the top, which is why it read as a rolling wave. */
     vec2 c = uRes * 0.5;
     vec2 d = p - c;
-    float rd = length(d);
-    if(rd > 0.0){
-      float u = clamp((rd/uDR - uFlat) / max(1.0 - uFlat, 1e-4), 0.0, 1.0);
-      p = c + d / (1.0 + uK*u*u);
+    vec2 H = c * uFlat;
+    float r = uCorner * min(H.x, H.y);
+    vec2 e = max(H - vec2(r), vec2(0.0));
+    vec2 q = max(abs(d) - e, vec2(0.0));
+    float L = length(q);
+    float dMax = max(length(c - e) - r, 1e-4);
+    float dist = L - r;
+    if(dist > 0.0 && L > 1e-6){
+      /* d/(1+k*d/dMax) -- mirrors lensSquash() in the page. Deliberately NOT k*u*u*dMax: that form
+         folds above k=0.5 (derivative 1-2k*u) and the image maps back through itself, which cost
+         197px of tap error at k=0.7 before it was caught. This one's derivative is 1/(1+k*u)^2,
+         positive everywhere, so it can never fold and inverts in closed form for the hit-test. */
+      float shift = dist - dist / (1.0 + uK * dist / dMax);
+      vec2 n = q / L * sign(d);
+      p -= n * shift;
     }
   }
   vCol = aCol;
@@ -229,7 +245,7 @@ function create(canvas){
     if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('link: ' + gl.getProgramInfoLog(prog));
     gl.useProgram(prog);
     U = { res:  gl.getUniformLocation(prog,'uRes'), k: gl.getUniformLocation(prog,'uK'),
-          flat: gl.getUniformLocation(prog,'uFlat'), dr: gl.getUniformLocation(prog,'uDR'),
+          flat: gl.getUniformLocation(prog,'uFlat'), dr: gl.getUniformLocation(prog,'uDR'), corner: gl.getUniformLocation(prog,'uCorner'),
           clipN: gl.getUniformLocation(prog,'uClipN'), clip: gl.getUniformLocation(prog,'uClip') };
     u32 = (typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext)
           || !!gl.getExtension('OES_element_index_uint');
@@ -735,6 +751,7 @@ function create(canvas){
       gl.uniform1f(U.k,    lens ? lens.k    : 0);
       gl.uniform1f(U.flat, lens ? lens.flat : 0.7);
       gl.uniform1f(U.dr,   lens ? lens.dr   : Math.hypot(w,h)/2);
+      gl.uniform1f(U.corner, lens ? lens.corner : 0.55);   /* rounded-rect corner radius as a fraction of the flat pane's shorter half-axis; the page owns the dial (TUNE.lensCorner) */
       gl.clearColor(0,0,0,0);
       gl.clear(gl.COLOR_BUFFER_BIT);
       vn = 0; inn = 0;
