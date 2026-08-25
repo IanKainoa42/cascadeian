@@ -1,1 +1,1 @@
-globalThis.HSL_BUILD_NUMBER = 306;
+globalThis.HSL_BUILD_NUMBER = 307;
