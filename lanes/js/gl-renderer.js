@@ -212,7 +212,7 @@ function compile(gl, type, src){
    noise (sub 2.88/2.25/1.75 vs baseline 2.56/2.31/1.78 across three passes).
    Nothing here is worth turning on -- the renderer is already ~10x under
    budget. They stay as instrumentation for the next time something IS slow. */
-const _glTune = { aa:true, sub:false, scale:1, noUpload:false, frozen:false, noTess:false, forceLost:false, bench:false };
+const _glTune = { aa:true, sub:false, scale:1, noUpload:false, frozen:false, noTess:false, forceLost:false, bench:false, lensSeg:64 };   /* lensSeg: device px between vertices inserted into a long stroke so the lens has a curve to bend -- see lensSubdivide. MEASURED, not guessed: at 22px a board frame went 51.4k -> 75.8k triangles (+48%), because every hex edge is long enough to get cut and each inserted vertex also mints a round joint. At 64px the same frame goes 51.1k -> 52.9k (+3.6%) and a full-width line still tracks the true field to 0.75px at the shipped dial (3.5px at k=0.7, twice it) -- the bend it has to follow is 18px, so that is invisible. The cost is in the count of CUT strokes, not in the cuts themselves. */
 try{
   const s = localStorage.getItem('hsl_gltune');
   if(s) Object.assign(_glTune, JSON.parse(s));
@@ -274,6 +274,55 @@ function create(canvas){
   /* transform: [a,b,c,d,e,f] applied on the CPU so every shape can share one draw call */
   let M = [1,0,0,1,0,0];
   const stack = [];
+
+  /* ---- lens subdivision ------------------------------------------------
+     THE LENS BENDS VERTICES, SO A TWO-POINT LINE CANNOT BEND (Ian 2026-08-25:
+     "the red laser and the blue laser seem to be on different layers ... when
+     the image starts to warp towards the edge of the screen they separate from
+     each other, the red laser stays in a straight line").
+     They were never on different layers. Everything here goes through the one
+     vertex shader -- but that shader can only move the vertices it is GIVEN.
+     The weapon cone is a corridor of per-hex polygons, hundreds of little
+     vertices, so it follows the curve exactly; the sight laser is one segment
+     with an endpoint at each end, so the warp slides those two points and
+     leaves the ruler-straight span between them untouched. The wider the bend,
+     the further the two drift apart. Same artifact on the board rim hexagon,
+     the order path and the cohesion links -- every long straight run.
+     The fix is geometric, not visual: hand the shader enough vertices along a
+     long segment for it to have a curve to bend. Deliberately NOT a change to
+     lensRectField/lensSquash/glWarpPt -- the FIELD is correct and hit-testing
+     reads it, so touching it would cost taps hundreds of px (b309). */
+  const LENS_SEG_MAX = 32;  /* a board-spanning line can't mint unbounded geometry */
+  let _lens = null;
+  function lensFlatInside(x, y){
+    /* mirrors the shader's `dist = L - r <= 0` test exactly. The flat pane is a
+       CONVEX rounded rect, so both endpoints inside means the whole segment is
+       inside and no point on it is displaced -- nothing to subdivide. */
+    const cx = CW*0.5, cy = CH*0.5, hx = cx*_lens.flat, hy = cy*_lens.flat;
+    const r = _lens.corner * Math.min(hx, hy);
+    const ex = Math.max(hx - r, 0), ey = Math.max(hy - r, 0);
+    const qx = Math.max(Math.abs(x - cx) - ex, 0), qy = Math.max(Math.abs(y - cy) - ey, 0);
+    return Math.hypot(qx, qy) - r <= 0;
+  }
+  function lensSubdivide(pts, closed){
+    const n = pts.length/2;
+    if(n < 2) return pts;
+    const out = [];
+    const lim = closed ? n : n-1;
+    for(let i=0;i<lim;i++){
+      const j = (i+1) % n;
+      const x0 = pts[i*2], y0 = pts[i*2+1], x1 = pts[j*2], y1 = pts[j*2+1];
+      out.push(x0, y0);
+      const L = Math.hypot(x1-x0, y1-y0);
+      const SEG = _glTune.lensSeg || 64;
+      if(L <= SEG) continue;
+      if(lensFlatInside(x0,y0) && lensFlatInside(x1,y1)) continue;
+      const cuts = Math.min(LENS_SEG_MAX, Math.ceil(L / SEG)) - 1;
+      for(let k=1;k<=cuts;k++){ const t = k/(cuts+1); out.push(x0 + (x1-x0)*t, y0 + (y1-y0)*t); }
+    }
+    if(!closed) out.push(pts[(n-1)*2], pts[(n-1)*2+1]);
+    return out;
+  }
 
   /* current paint state */
   const st = {
@@ -687,7 +736,10 @@ function create(canvas){
       if(dash && dash.length % 2) dash = dash.concat(dash);   /* Canvas2D duplicates an odd-length pattern so on/off alternate evenly */
       const dashOff = dash ? (st.lineDashOffset || 0) * sc : 0;
       const r = openRange();
-      for(const sp of target) emitStroke(sp.pts, sp.closed, hw, paint.col, aEff, dash, st.lineCap, paint.cf, dashOff);
+      for(const sp of target){
+        const pts = (_lens && _lens.k > 0) ? lensSubdivide(sp.pts, sp.closed) : sp.pts;   /* see lensSubdivide: only long runs that actually reach the bend gain vertices, and only while the lens is on */
+        emitStroke(pts, sp.closed, hw, paint.col, aEff, dash, st.lineCap, paint.cf, dashOff);
+      }
       closeRange(r);
     },
     fillRect(x,y,w,h){ api.beginPath(); api.rect(x,y,w,h); api.fill(); },
@@ -752,6 +804,7 @@ function create(canvas){
       gl.uniform1f(U.flat, lens ? lens.flat : 0.7);
       gl.uniform1f(U.dr,   lens ? lens.dr   : Math.hypot(w,h)/2);
       gl.uniform1f(U.corner, lens ? lens.corner : 0.55);   /* rounded-rect corner radius as a fraction of the flat pane's shorter half-axis; the page owns the dial (TUNE.lensCorner) */
+      _lens = lens ? {k:lens.k, flat:(lens.flat!=null?lens.flat:0.7), corner:(lens.corner!=null?lens.corner:0.55)} : null;   /* kept CPU-side too, so stroke() can subdivide long runs against the same field the shader bends -- see lensSubdivide */
       gl.clearColor(0,0,0,0);
       gl.clear(gl.COLOR_BUFFER_BIT);
       vn = 0; inn = 0;
