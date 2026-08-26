@@ -130,7 +130,7 @@ Gradient.prototype.at = function(t){
    is what pulls more field into view.                                            */
 const VS = `
 attribute vec2 aPos; attribute vec4 aCol;
-uniform vec2 uRes; uniform float uK, uFlat, uDR, uCorner;
+uniform vec2 uRes; uniform float uK, uFlat, uDR, uCorner, uAxis;
 varying vec4 vCol; varying vec2 vPos;
 void main(){
   vec2 p = aPos;
@@ -142,7 +142,16 @@ void main(){
        a 2.4:1 frame reaches the sides long before the top, which is why it read as a rolling wave. */
     vec2 c = uRes * 0.5;
     vec2 d = p - c;
-    vec2 H = c * uFlat;
+    /* SHORT-AXIS BIAS (uAxis). At 0 the flat pane keeps the screen's proportions and all four
+       edges bend, which is the shape shipped in b309. At 1 the LONG axis's half of the pane is
+       relaxed all the way out to the screen edge, so those two edges never leave the flat pane
+       and only the short dimension bends. step() is strict, so a square screen ignores the dial
+       entirely rather than flattening both axes into no lens at all. Note this also collapses
+       dMax below -- the corner it normalises against comes in, so u reaches ~1 at the short
+       edge where it used to reach ~0.3, and the SAME uK bends visibly harder. That is the
+       point, not a side effect: the bend stops being spent on edges that had field to spare. */
+    vec2 lng = step(c.yx + vec2(1e-4), c);
+    vec2 H = c * (uFlat + (1.0 - uFlat) * (uAxis * lng));
     float r = uCorner * min(H.x, H.y);
     vec2 e = max(H - vec2(r), vec2(0.0));
     vec2 q = max(abs(d) - e, vec2(0.0));
@@ -245,7 +254,7 @@ function create(canvas){
     if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('link: ' + gl.getProgramInfoLog(prog));
     gl.useProgram(prog);
     U = { res:  gl.getUniformLocation(prog,'uRes'), k: gl.getUniformLocation(prog,'uK'),
-          flat: gl.getUniformLocation(prog,'uFlat'), dr: gl.getUniformLocation(prog,'uDR'), corner: gl.getUniformLocation(prog,'uCorner'),
+          flat: gl.getUniformLocation(prog,'uFlat'), dr: gl.getUniformLocation(prog,'uDR'), corner: gl.getUniformLocation(prog,'uCorner'), axis: gl.getUniformLocation(prog,'uAxis'),
           clipN: gl.getUniformLocation(prog,'uClipN'), clip: gl.getUniformLocation(prog,'uClip') };
     u32 = (typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext)
           || !!gl.getExtension('OES_element_index_uint');
@@ -298,7 +307,9 @@ function create(canvas){
     /* mirrors the shader's `dist = L - r <= 0` test exactly. The flat pane is a
        CONVEX rounded rect, so both endpoints inside means the whole segment is
        inside and no point on it is displaced -- nothing to subdivide. */
-    const cx = CW*0.5, cy = CH*0.5, hx = cx*_lens.flat, hy = cy*_lens.flat;
+    const cx = CW*0.5, cy = CH*0.5, _ax = _lens.axis||0;
+    const _lx = cx >= cy+1e-4 ? _ax : 0, _ly = cy >= cx+1e-4 ? _ax : 0;   /* MUST MATCH the shader's step(c.yx+1e-4, c) exactly. This is a SKIP test -- a segment with both ends inside the pane gains no vertices -- so a pane that is wider here than in the shader silently leaves long strokes straight through a band that is really bending. */
+    const hx = cx*(_lens.flat + (1-_lens.flat)*_lx), hy = cy*(_lens.flat + (1-_lens.flat)*_ly);
     const r = _lens.corner * Math.min(hx, hy);
     const ex = Math.max(hx - r, 0), ey = Math.max(hy - r, 0);
     const qx = Math.max(Math.abs(x - cx) - ex, 0), qy = Math.max(Math.abs(y - cy) - ey, 0);
@@ -803,8 +814,9 @@ function create(canvas){
       gl.uniform1f(U.k,    lens ? lens.k    : 0);
       gl.uniform1f(U.flat, lens ? lens.flat : 0.7);
       gl.uniform1f(U.dr,   lens ? lens.dr   : Math.hypot(w,h)/2);
+      gl.uniform1f(U.axis, lens && lens.axis!=null ? lens.axis : 0);
       gl.uniform1f(U.corner, lens ? lens.corner : 0.55);   /* rounded-rect corner radius as a fraction of the flat pane's shorter half-axis; the page owns the dial (TUNE.lensCorner) */
-      _lens = lens ? {k:lens.k, flat:(lens.flat!=null?lens.flat:0.7), corner:(lens.corner!=null?lens.corner:0.55)} : null;   /* kept CPU-side too, so stroke() can subdivide long runs against the same field the shader bends -- see lensSubdivide */
+      _lens = lens ? {k:lens.k, flat:(lens.flat!=null?lens.flat:0.7), corner:(lens.corner!=null?lens.corner:0.55), axis:(lens.axis!=null?lens.axis:0)} : null;   /* kept CPU-side too, so stroke() can subdivide long runs against the same field the shader bends -- see lensSubdivide */
       gl.clearColor(0,0,0,0);
       gl.clear(gl.COLOR_BUFFER_BIT);
       vn = 0; inn = 0;
