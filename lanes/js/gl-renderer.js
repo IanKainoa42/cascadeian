@@ -232,7 +232,7 @@ function create(canvas){
      comparison inside a single match on a device whose UI cannot be scripted,
      and a match restart per variant is the expensive part of this loop. */
   function buildContext(cv, aa){
-    const attr = {alpha:true, antialias:!!aa, depth:false, stencil:false, premultipliedAlpha:true};
+    const attr = {alpha:true, antialias:!!aa, depth:false, stencil:false, premultipliedAlpha:true, preserveDrawingBuffer:true};   /* THE BLINKING BOARD (Ian 2026-08-25, iPhone, build 310: "the gpu board on brings the blinking back"; off, it is clean). Without this the drawing buffer's contents are UNDEFINED after every composite -- in practice cleared -- so a presented frame that was not redrawn shows an empty world layer while the 2D text overlay above it keeps its pixels. loop() skips drawing constantly by design: it registers a rAF every display frame but bails under the 25ms frame cap, and drops to a 100ms cadence on a settled board. Against a 60/120Hz iPhone panel that is most presented frames, which is the blink. A 2D canvas retains its pixels indefinitely, which is exactly why turning the GPU board off cured it. The invariant is structural: a non-preserving drawing buffer must be redrawn on EVERY presented frame, and this loop deliberately does not -- so the buffer has to preserve instead. The alternative (draw every rAF whenever GL is live) spends the battery budget the idle throttle exists to protect, for a board that is not moving. */
     const g = cv.getContext('webgl2', attr) || cv.getContext('webgl', attr);
     if(!g) return false;
     gl = g;
